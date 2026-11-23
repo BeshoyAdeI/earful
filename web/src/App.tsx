@@ -4,6 +4,7 @@ import { AddToPlaylistDialog, ShortcutsDialog } from "./components/Dialogs";
 import { MiniPlayer, TabBar } from "./components/MobileChrome";
 import { NowPlayingSheet, PanelDrawer, SidePanel } from "./components/NowPlaying";
 import { PlayerBar } from "./components/PlayerBar";
+import { PlaylistFileDialog } from "./components/PlaylistFileDialog";
 import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
 import { desktop } from "./lib/desktop";
@@ -14,8 +15,10 @@ import { FloatingVideo, Theater } from "./components/Video";
 import { MD, useMediaQuery } from "./hooks/useMediaQuery";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { getT } from "./i18n";
-import { capabilities } from "./lib/api";
+import { capabilities, onExternalFile } from "./lib/api";
 import { cn } from "./lib/format";
+import { openPlaylistFile, openPlaylistFromDisk } from "./lib/openPlaylistFile";
+import { isPlaylistFileName } from "./lib/playlistFile";
 import { legacyRedirect, NOW_PLAYING_HASH, paths } from "./lib/routes";
 import { usePlayer } from "./player/player";
 import { useLibrary } from "./stores/library";
@@ -31,6 +34,8 @@ import Library from "./views/Library";
 import Search from "./views/Search";
 
 const SHEET_HASH = `#${NOW_PLAYING_HASH}`;
+
+type LaunchQueue = { setConsumer(consumer: (params: { files: FileSystemFileHandle[] }) => void): void };
 
 export default function App() {
   const location = useLocation();
@@ -49,6 +54,45 @@ export default function App() {
   useEffect(() => {
     void loadLibrary();
   }, [loadLibrary]);
+
+  useEffect(() => {
+    const removeNative = onExternalFile(openPlaylistFile);
+    const removeDesktop = desktop?.onOpenPlaylist?.(({ text, fileName, error }) => {
+      if (error) toast(getT().playlistFile[error], "error");
+      else openPlaylistFile(text, fileName);
+    });
+    const dragOver = (event: DragEvent) => {
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+    };
+    const drop = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes("Files")) return;
+      event.preventDefault();
+      for (const file of event.dataTransfer.files) {
+        if (isPlaylistFileName(file.name)) void openPlaylistFromDisk(file);
+      }
+    };
+    let active = true;
+    const launchQueue = (window as Window & { launchQueue?: LaunchQueue }).launchQueue;
+    queueMicrotask(() => {
+      if (!active) return;
+      launchQueue?.setConsumer(({ files }) => {
+        if (!active) return;
+        for (const handle of files) {
+          if (!isPlaylistFileName(handle.name)) continue;
+          void handle.getFile().then(openPlaylistFromDisk).catch(() => toast(getT().playlistFile.readFailed, "error"));
+        }
+      });
+    });
+    window.addEventListener("dragover", dragOver);
+    window.addEventListener("drop", drop);
+    return () => {
+      active = false;
+      removeNative();
+      removeDesktop?.();
+      window.removeEventListener("dragover", dragOver);
+      window.removeEventListener("drop", drop);
+    };
+  }, []);
 
   // Check yt-dlp shortly after start and say so once if something needs doing (not on Android: no yt-dlp there).
   useEffect(() => {
@@ -154,6 +198,7 @@ export default function App() {
       <Theater />
       <TrackMenu />
       <AddToPlaylistDialog />
+      <PlaylistFileDialog />
       <ShortcutsDialog />
       <SettingsDialog />
       <Toasts />

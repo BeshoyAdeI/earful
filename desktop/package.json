@@ -37,6 +37,16 @@
     "artifactBuildCompleted": "build/collect.cjs",
     "asar": true,
     "npmRebuild": false,
+    "fileAssociations": [
+      {
+        "ext": "earful",
+        "name": "Earful Playlist",
+        "description": "Earful playlist",
+        "icon": "icon",
+        "role": "Viewer",
+        "mimeType": "application/x-earful-playlist"
+      }
+    ],
     "win": {
       "target": [
         {

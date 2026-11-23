@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import {
@@ -17,7 +18,8 @@ import { findVideoFor, radio, search, suggestions } from "../../../server/src/se
 import { HttpError, VIDEO_ID } from "../../../server/src/types";
 import { getLang, getT } from "../i18n";
 import { ApiError, type EarfulApi, type SystemInfo } from "../lib/apiTypes";
-import "./android";
+import { PLAYLIST_FILE_MIME } from "../lib/playlistFile";
+import { Device } from "./android";
 import { media } from "./media";
 import { nativeStorage } from "./storage";
 import { forgetUrl, resolveAudio } from "./streams";
@@ -25,6 +27,7 @@ import { forgetUrl, resolveAudio } from "./streams";
 // The Android backend: the Earful server's own code (search, genres, artists, albums, library), running on the
 // phone instead of behind HTTP. The build swaps lib/api.ts for this module (see vite.config.ts).
 export * from "../lib/apiTypes";
+export { onExternalFile } from "./playlistFiles";
 
 library.useLibraryStorage(nativeStorage);
 
@@ -46,6 +49,7 @@ async function call<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
 }
 
 const tracks = (list: unknown[]) => list.slice(0, 500).map(library.sanitizeTrack);
+const discordUnavailable = async () => ({ available: false, enabled: false, connected: false });
 
 const SYSTEM: SystemInfo = {
   ytdlp: { path: "built-in", version: null, channel: "stable", latest: { stable: null, nightly: null }, updateAvailable: false },
@@ -89,12 +93,16 @@ export const api: EarfulApi = {
       return { id, title: r.title, duration: r.duration, hasSdVideo: false };
     }, signal),
 
+  nowPlaying: async () => {},
+  discordStatus: discordUnavailable,
+  setDiscord: discordUnavailable,
+
   library: () => call(() => library.getLibrary()),
   addFavorite: (t) => call(async () => ({ favorites: await library.addFavorite(library.sanitizeTrack(t)) })),
   addFavorites: (list) => call(async () => ({ favorites: await library.addFavorites(tracks(list)) })),
   removeFavorite: (id) => call(async () => ({ favorites: await library.removeFavorite(id) })),
   pushHistory: (t) => call(async () => ({ history: await library.pushHistory(library.sanitizeTrack(t)) })),
-  createPlaylist: (name, list = []) => call(() => library.createPlaylist(name, tracks(list))),
+  createPlaylist: (name, list = []) => call(() => library.createPlaylist(name, list.slice(0, 5000).map(library.sanitizeTrack))),
   renamePlaylist: (id, name) => call(() => library.renamePlaylist(id, name)),
   deletePlaylist: (id) => call(() => library.deletePlaylist(id)),
   addToPlaylist: (id, t) => call(() => library.addToPlaylist(id, Array.isArray(t) ? tracks(t) : library.sanitizeTrack(t))),
@@ -122,8 +130,11 @@ export async function explainStreamError(url: string): Promise<{ message: string
 }
 
 /** Backups are shared through Android's share sheet (save to Files, Drive, send to the computer…). */
-export async function saveFile(name: string, text: string) {
+export async function saveFile(name: string, text: string, mime?: string) {
   const { uri } = await Filesystem.writeFile({ path: name, data: text, directory: Directory.Cache, encoding: Encoding.UTF8 });
+  if (mime === PLAYLIST_FILE_MIME && Capacitor.getPlatform() === "android") {
+    return Device.sharePlaylist({ uri, title: name });
+  }
   await Share.share({ title: name, files: [uri] });
 }
 

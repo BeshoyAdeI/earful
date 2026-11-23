@@ -7,6 +7,10 @@ export type Lang = "en" | "pt-BR";
 type Params = Record<string, string | number>;
 
 const en = {
+  discordPaused: "Paused",
+  discordYoutube: "Listen on YouTube",
+  discordSetting: "Send an enabled setting of true or false.",
+  discordSettingsFailed: "Couldn't save the Discord setting.",
   invalidVideoId: "Invalid video ID.",
   emptyQuery: "Type something to search.",
   searchFailed: "Search is unavailable right now ({detail}). Try again in a moment.",
@@ -58,6 +62,10 @@ const en = {
 export type MsgKey = keyof typeof en;
 
 const pt: Record<MsgKey, string> = {
+  discordPaused: "Em pausa",
+  discordYoutube: "Ouvir no YouTube",
+  discordSetting: "Informe se o Discord deve estar ativado ou desativado.",
+  discordSettingsFailed: "Não foi possível salvar a configuração do Discord.",
   invalidVideoId: "ID de vídeo inválido.",
   emptyQuery: "Digite algo para buscar.",
   searchFailed: "A busca está indisponível agora ({detail}). Tente de novo em instantes.",

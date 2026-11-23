@@ -1,4 +1,4 @@
-import { ArrowRightIcon, MusicNotesIcon, PauseIcon, PlayIcon, PlaylistIcon, ShuffleIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, ExportIcon, MusicNotesIcon, PauseIcon, PlayIcon, PlaylistIcon, ShuffleIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { Artwork } from "../components/Artwork";
@@ -10,6 +10,7 @@ import { useRemote } from "../hooks/useRemote";
 import { useI18n, useT } from "../i18n";
 import { api } from "../lib/api";
 import { shuffled } from "../lib/format";
+import { sharePlaylistFile } from "../lib/openPlaylistFile";
 import { paths } from "../lib/routes";
 import type { AlbumPage } from "../lib/types";
 import { usePlayer } from "../player/player";
@@ -47,7 +48,19 @@ export default function Album() {
 
   return (
     <div className="pb-8">
-      <PageHeader title={title} actions={<BackButton fallback={paths.search} />} />
+      <PageHeader
+        title={title}
+        actions={
+          <>
+            {album && (
+              <IconButton label={t.playlistFile.share} onClick={() => void sharePlaylistFile(album.title, tracks)}>
+                <ExportIcon size={20} />
+              </IconButton>
+            )}
+            <BackButton fallback={paths.search} />
+          </>
+        }
+      />
 
       <div className="relative">
         <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-20 h-72 bg-linear-to-b from-accent-soft to-transparent" />

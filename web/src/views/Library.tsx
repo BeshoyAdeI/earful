@@ -1,11 +1,13 @@
-import { DatabaseIcon, PlusIcon } from "@phosphor-icons/react";
-import { useState } from "react";
+import { DatabaseIcon, FolderOpenIcon, PlusIcon } from "@phosphor-icons/react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
 import { NamePlaylistDialog } from "../components/Dialogs";
 import { PageHeader } from "../components/Page";
 import { useT } from "../i18n";
 import { paths } from "../lib/routes";
+import { openPlaylistFromDisk } from "../lib/openPlaylistFile";
+import { PLAYLIST_FILE_MIME } from "../lib/playlistFile";
 import type { Track } from "../lib/types";
 import { IconButton } from "../components/IconButton";
 import { useLibrary } from "../stores/library";
@@ -36,6 +38,7 @@ function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind
 export default function Library() {
   const { favorites, playlists, history, createPlaylist } = useLibrary();
   const [creating, setCreating] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const setSettingsOpen = useUi((s) => s.setSettingsOpen);
   const navigate = useNavigate();
   const t = useT();
@@ -46,6 +49,20 @@ export default function Library() {
         title={t.nav.library}
         actions={
           <>
+          <input
+            ref={fileInput}
+            type="file"
+            accept={`.earful,${PLAYLIST_FILE_MIME}`}
+            hidden
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) void openPlaylistFromDisk(file);
+            }}
+          />
+          <IconButton label={t.playlistFile.open} onClick={() => fileInput.current?.click()}>
+            <FolderOpenIcon size={20} />
+          </IconButton>
           <IconButton label={t.library.backup} onClick={() => setSettingsOpen(true)}>
             <DatabaseIcon size={20} />
           </IconButton>

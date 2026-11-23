@@ -317,6 +317,28 @@ export const en = {
     noTracksBody: "YouTube Music doesn't offer this album's tracks here.",
   },
 
+  playlistFile: {
+    share: "Share as .earful file",
+    open: "Open .earful file",
+    add: "Add to library",
+    invalid: "This file is not a valid Earful playlist.",
+    tooLarge: "Earful playlist files must be 5 MB or smaller.",
+    tooManyTracks: "Earful playlist files can contain up to 5,000 songs.",
+    readFailed: "Couldn't read the playlist file.",
+    saveFailed: "Couldn't save the playlist file.",
+    addFailed: "Couldn't load the library.",
+    fallbackName: "Playlist",
+  },
+
+  discord: {
+    title: "Discord",
+    toggle: "Show what I'm listening to on Discord",
+    connected: "Connected",
+    waiting: "Waiting for Discord…",
+    note: "Discord shows it while the Discord app runs on this computer.",
+    saveFailed: "Couldn't update the Discord setting.",
+  },
+
   settings: {
     title: "Settings",
     appearance: "Appearance",

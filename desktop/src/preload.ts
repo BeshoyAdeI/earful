@@ -6,4 +6,10 @@ contextBridge.exposeInMainWorld("earfulDesktop", {
   setTheme: (theme: "dark" | "light") => ipcRenderer.send("earful:theme", theme),
   setLanguage: (lang: string) => ipcRenderer.send("earful:lang", lang),
   retry: () => ipcRenderer.send("earful:retry"),
+  onOpenPlaylist: (handler: (file: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, file: unknown) => handler(file);
+    ipcRenderer.on("earful:open-playlist", listener);
+    ipcRenderer.send("earful:playlist-ready");
+    return () => ipcRenderer.removeListener("earful:open-playlist", listener);
+  },
 });

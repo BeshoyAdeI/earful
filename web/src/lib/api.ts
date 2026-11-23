@@ -3,6 +3,8 @@ import {
   ApiError,
   type Channel,
   type ErrorCode,
+  type DiscordStatus,
+  type ExternalFileHandler,
   type ImportResult,
   type EarfulApi,
   type Prepared,
@@ -60,6 +62,10 @@ export const api: EarfulApi = {
       signal,
     }),
 
+  nowPlaying: (playing) => request<void>("/api/now-playing", { method: "POST", json: playing, keepalive: true }),
+  discordStatus: () => request<DiscordStatus>("/api/discord"),
+  setDiscord: (enabled) => request<DiscordStatus>("/api/discord", { method: "PUT", json: { enabled } }),
+
   library: () => request<Library>("/api/library"),
   addFavorite: (t: Track) => request<{ favorites: Track[] }>(`/api/favorites/${t.id}`, { method: "PUT", json: t }),
   addFavorites: (tracks: Track[]) => request<{ favorites: Track[] }>("/api/favorites", { method: "POST", json: { tracks } }),
@@ -86,13 +92,17 @@ export const streamSource = (id: string, kind: "audio" | "video", quality: "sd" 
   kind === "audio" ? `/api/stream/${id}/audio` : `/api/stream/${id}/video?q=${quality}`;
 
 /** Saves a text file the way this platform does it: a browser download (the desktop app shows "Save as"). */
-export async function saveFile(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+export async function saveFile(name: string, text: string, mime = "application/json") {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+export function onExternalFile(_handler: ExternalFileHandler): () => void {
+  return () => {};
 }
 
 /** Only the Android app needs its own bridge to the system's media controls. */

@@ -67,6 +67,7 @@ export default defineConfig(({ mode }) => {
               background_color: "#0B0C0F",
               display: "standalone",
               start_url: "/",
+              file_handlers: [{ action: "/", accept: { "application/x-earful-playlist": [".earful"] } }],
               icons: [
                 { src: "icon-192.png", sizes: "192x192", type: "image/png" },
                 { src: "icon-512.png", sizes: "512x512", type: "image/png" },

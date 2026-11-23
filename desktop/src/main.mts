@@ -1,8 +1,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { open } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain, Menu, screen, shell } from "electron";
 import type { RunningServer } from "../../server/src/app.js";
+import { isPlaylistFileName, MAX_PLAYLIST_FILE_BYTES } from "../../web/src/lib/playlistFile.js";
 import { backupLibraryOnUpdate } from "./backup.js";
 
 // No top-level await in this file: Electron only fires "ready" after the entry module finishes
@@ -156,6 +158,76 @@ function createMainWindow(url: string): BrowserWindow {
 
 let mainWindow: BrowserWindow | null = null;
 let server: RunningServer | null = null;
+let playlistReady = false;
+let deliveringPlaylists = false;
+const playlistPaths: string[] = [];
+
+async function readPlaylistFile(filename: string) {
+  const fileName = path.basename(filename);
+  try {
+    const file = await open(filename, "r");
+    try {
+      const stat = await file.stat();
+      if (!stat.isFile()) return { fileName, error: "readFailed" };
+      if (stat.size > MAX_PLAYLIST_FILE_BYTES) return { fileName, error: "tooLarge" };
+
+      const buffer = Buffer.alloc(stat.size + 1);
+      let length = 0;
+      while (length < buffer.length) {
+        const { bytesRead } = await file.read(buffer, length, buffer.length - length, null);
+        if (!bytesRead) break;
+        length += bytesRead;
+      }
+      if (length > MAX_PLAYLIST_FILE_BYTES) return { fileName, error: "tooLarge" };
+      if (length !== stat.size) return { fileName, error: "readFailed" };
+      return { fileName, text: buffer.toString("utf8", 0, length) };
+    } finally {
+      await file.close();
+    }
+  } catch {
+    return { fileName, error: "readFailed" };
+  }
+}
+
+async function deliverPlaylists() {
+  if (deliveringPlaylists) return;
+  deliveringPlaylists = true;
+  try {
+    while (playlistReady && mainWindow && !mainWindow.isDestroyed() && playlistPaths.length) {
+      const win = mainWindow;
+      const file = await readPlaylistFile(playlistPaths[0]!);
+      if (!playlistReady || mainWindow !== win || win.isDestroyed()) continue;
+      win.webContents.send("earful:open-playlist", file);
+      playlistPaths.shift();
+    }
+  } finally {
+    deliveringPlaylists = false;
+  }
+}
+
+function queuePlaylists(argv: string[], directory: string) {
+  for (const argument of argv) {
+    try {
+      const filename = argument.startsWith("file://") ? fileURLToPath(argument) : argument;
+      if (!filename.startsWith("-") && isPlaylistFileName(filename)) {
+        const absolute = path.resolve(directory, filename);
+        if (!playlistPaths.includes(absolute)) playlistPaths.push(absolute);
+      }
+    } catch {
+      // A malformed file URL is not a path the OS can open.
+    }
+  }
+  void deliverPlaylists();
+}
+
+queuePlaylists(process.argv.slice(app.isPackaged ? 1 : 2), process.cwd());
+
+ipcMain.on("earful:playlist-ready", (event) => {
+  if (event.sender !== mainWindow?.webContents || event.senderFrame !== event.sender.mainFrame) return;
+  if (!event.senderFrame.url.startsWith(`http://127.0.0.1:${server?.port}/`)) return;
+  playlistReady = true;
+  void deliverPlaylists();
+});
 
 async function launch() {
   const splash = createSplash();
@@ -180,6 +252,9 @@ async function launch() {
 
   clearInterval(report);
   mainWindow = createMainWindow(`http://127.0.0.1:${server.port}`);
+  mainWindow.webContents.on("did-start-navigation", (details) => {
+    if (details.isMainFrame && !details.isSameDocument) playlistReady = false;
+  });
   mainWindow.once("ready-to-show", () => splash.destroy());
 }
 
@@ -207,10 +282,21 @@ ipcMain.on("earful:retry", (event) => {
   failed?.destroy();
 });
 
-app.on("second-instance", () => {
-  if (!mainWindow) return;
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.focus();
+}
+
+app.on("second-instance", (_event, argv, workingDirectory) => {
+  queuePlaylists(argv.slice(app.isPackaged ? 1 : 2), workingDirectory);
+  focusMainWindow();
+});
+
+app.on("open-file", (event, filename) => {
+  event.preventDefault();
+  queuePlaylists([filename], process.cwd());
+  focusMainWindow();
 });
 
 app.on("window-all-closed", () => app.quit());

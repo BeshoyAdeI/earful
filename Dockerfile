@@ -57,6 +57,7 @@ ENV NODE_ENV=production \
     EARFUL_DATA_DIR=/data \
     EARFUL_CACHE_DIR=/cache \
     EARFUL_WEB_DIST=/app/web \
+    EARFUL_DISCORD_DISABLED=1 \
     PATH=/opt/earful/bin:$PATH
 
 USER node

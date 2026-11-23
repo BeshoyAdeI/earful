@@ -311,6 +311,28 @@ export const pt: Messages = {
     noTracksBody: "O YouTube Music não oferece as faixas deste álbum aqui.",
   },
 
+  playlistFile: {
+    share: "Compartilhar como arquivo .earful",
+    open: "Abrir arquivo .earful",
+    add: "Adicionar à biblioteca",
+    invalid: "Este arquivo não é uma playlist válida do Earful.",
+    tooLarge: "Arquivos de playlist do Earful devem ter no máximo 5 MB.",
+    tooManyTracks: "Arquivos de playlist do Earful podem conter até 5.000 músicas.",
+    readFailed: "Não foi possível ler o arquivo da playlist.",
+    saveFailed: "Não foi possível salvar o arquivo da playlist.",
+    addFailed: "Não foi possível carregar a biblioteca.",
+    fallbackName: "Playlist",
+  },
+
+  discord: {
+    title: "Discord",
+    toggle: "Mostrar o que estou ouvindo no Discord",
+    connected: "Conectado",
+    waiting: "Aguardando o Discord…",
+    note: "O Discord mostra o que você ouve enquanto o app do Discord está aberto neste computador.",
+    saveFailed: "Não foi possível atualizar a configuração do Discord.",
+  },
+
   settings: {
     title: "Ajustes",
     appearance: "Aparência",
