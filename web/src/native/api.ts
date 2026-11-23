@@ -122,7 +122,7 @@ export const api: EarfulApi = {
   addFavorites: (list) => call(async () => ({ favorites: await library.addFavorites(tracks(list)) })),
   removeFavorite: (id) => call(async () => ({ favorites: await library.removeFavorite(id) })),
   pushHistory: (t) => call(async () => ({ history: await library.pushHistory(library.sanitizeTrack(t)) })),
-  createPlaylist: (name, list = []) => call(() => library.createPlaylist(name, list.slice(0, 5000).map(library.sanitizeTrack))),
+  createPlaylist: (name, list = [], id) => call(() => library.createPlaylist(name, list.slice(0, 5000).map(library.sanitizeTrack), id)),
   renamePlaylist: (id, name) => call(() => library.renamePlaylist(id, name)),
   deletePlaylist: (id) => call(() => library.deletePlaylist(id)),
   addToPlaylist: (id, t) => call(() => library.addToPlaylist(id, Array.isArray(t) ? tracks(t) : library.sanitizeTrack(t))),

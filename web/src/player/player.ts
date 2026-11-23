@@ -187,7 +187,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
     });
   }
 
-  function load(index: number, opts: { autoplay?: boolean; startAt?: number } = {}) {
+  /**
+   * `handoff`: switching Audio ⇄ Video on the same track. The playing element keeps going until the new one
+   * actually plays, then the new one takes over at the same moment of the song, so there is no silent gap.
+   */
+  function load(index: number, opts: { autoplay?: boolean; startAt?: number; handoff?: boolean } = {}) {
     const s = get();
     const track = s.queue[index];
     if (!track) return;
@@ -210,7 +214,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         duration: track.duration,
         buffered: 0,
       });
-      activeMedia()?.pause();
+      if (!opts.handoff) activeMedia()?.pause();
       setMetadata(track);
       void lookupClip(track).then(() => mine === token && load(index, opts));
       return;
@@ -219,11 +223,15 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const kind = kindFor(track);
     const media = mediaFor(kind);
     const other = mediaFor(kind === "video" ? "audio" : "video");
-    other.pause();
-    if (other.getAttribute("src")) {
-      other.removeAttribute("src");
-      other.load();
-    }
+    const stop = (el: HTMLMediaElement) => {
+      el.pause();
+      if (el.getAttribute("src")) {
+        el.removeAttribute("src");
+        el.load();
+      }
+    };
+    const outgoing = opts.handoff && !other.paused ? other : null;
+    if (!outgoing) stop(other);
 
     token++;
     loaded = { id: track.id, kind, quality: s.quality };
@@ -246,6 +254,24 @@ export const usePlayer = create<PlayerState>((set, get) => {
       media.src = src;
       if (autoplay) play(media);
     };
+    if (outgoing) {
+      const mine = token;
+      const takeOver = () => {
+        media.removeEventListener("playing", takeOver);
+        media.removeEventListener("error", giveUp);
+        if (mine !== token) return;
+        // The old element kept playing meanwhile: continue from where it is now, not from the click.
+        if (Math.abs(media.currentTime - outgoing.currentTime) > 0.4) media.currentTime = outgoing.currentTime;
+        stop(outgoing);
+      };
+      const giveUp = () => {
+        media.removeEventListener("playing", takeOver);
+        media.removeEventListener("error", giveUp);
+        if (mine === token) stop(outgoing);
+      };
+      media.addEventListener("playing", takeOver);
+      media.addEventListener("error", giveUp);
+    }
     // The server's proxy URL is known right away; on Android the stream is first resolved on the phone.
     const getSource = () => streamSource(mediaIdFor(track, kind), kind, s.quality);
     const source = ready ? ready.catch(() => {}).then(getSource) : getSource();
@@ -410,10 +436,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
     set({ videoNote: noteFor(track) });
     if (!loaded || loaded.id !== track.id) return;
     const wasPlaying = s.status === "playing" || s.status === "loading";
-    if (needsClipLookup(track, s.preferVideo)) return load(s.index, { startAt: s.position, autoplay: wasPlaying });
+    if (needsClipLookup(track, s.preferVideo)) return load(s.index, { startAt: s.position, autoplay: wasPlaying, handoff: true });
     const kind = kindFor(track);
     if (loaded.kind === kind && (kind === "audio" || loaded.quality === s.quality)) return;
-    load(s.index, { startAt: s.position, autoplay: wasPlaying });
+    load(s.index, { startAt: s.position, autoplay: wasPlaying, handoff: loaded.kind !== kind });
   };
 
   return {

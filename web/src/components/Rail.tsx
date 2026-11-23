@@ -21,6 +21,7 @@ import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { Logo, LogoMark } from "./Brand";
 import { NamePlaylistDialog } from "./Dialogs";
+import { byRecentPlay, usePlaylistPlays } from "../stores/playlistPlays";
 
 const nav = [
   { to: paths.home, key: "home", Icon: HouseIcon, end: true },
@@ -98,7 +99,8 @@ function RailLink({ to, label, sub, end, children }: { to: string; label: string
 export function Rail() {
   const t = useT();
   const sidebarPlaylists = useAppearance((s) => s.sidebarPlaylists);
-  const playlists = useLibrary((s) => s.playlists);
+  const playedAt = usePlaylistPlays((s) => s.playedAt);
+  const playlists = byRecentPlay(useLibrary((s) => s.playlists), playedAt);
   const favorites = useLibrary((s) => s.favorites);
   const createPlaylist = useLibrary((s) => s.createPlaylist);
   const navigate = useNavigate();

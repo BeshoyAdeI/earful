@@ -134,7 +134,7 @@ export interface EarfulApi {
   addFavorites(tracks: Track[]): Promise<{ favorites: Track[] }>;
   removeFavorite(id: string): Promise<{ favorites: Track[] }>;
   pushHistory(t: Track): Promise<{ history: Track[] }>;
-  createPlaylist(name: string, tracks?: Track[]): Promise<Playlist>;
+  createPlaylist(name: string, tracks?: Track[], id?: string): Promise<Playlist>;
   renamePlaylist(id: string, name: string): Promise<Playlist>;
   deletePlaylist(id: string): Promise<void>;
   addToPlaylist(id: string, t: Track | Track[]): Promise<Playlist>;

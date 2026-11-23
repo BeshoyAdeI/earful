@@ -9,6 +9,7 @@ import { Rail } from "./components/Rail";
 import { TitleBar } from "./components/TitleBar";
 import { desktop } from "./lib/desktop";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { LyricsStage } from "./components/LyricsStage";
 import { Toasts } from "./components/Toasts";
 import { TrackMenu } from "./components/TrackMenu";
 import { FloatingVideo, Theater } from "./components/Video";
@@ -205,6 +206,7 @@ export default function App() {
       <PlaylistFileDialog />
       <ShortcutsDialog />
       <SettingsDialog />
+      <LyricsStage />
       <Toasts />
     </div>
   );

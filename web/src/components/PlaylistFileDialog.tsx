@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { useT } from "../i18n";
 import { closePlaylistFile, usePlaylistFile } from "../lib/openPlaylistFile";
 import { paths } from "../lib/routes";
+import { api } from "../lib/api";
 import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
 import { toast } from "../stores/ui";
@@ -15,6 +16,8 @@ export function PlaylistFileDialog() {
   const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
   const pending = useRef(false);
+  // The same playlist is already here (shared before): adding updates it instead of making a copy.
+  const mine = useLibrary((s) => (file?.id ? s.playlists.find((p) => p.id === file.id) : undefined));
 
   const close = () => {
     if (file && !pending.current) closePlaylistFile(file);
@@ -30,6 +33,26 @@ export function PlaylistFileDialog() {
       await library.load();
       const { playlists, status } = useLibrary.getState();
       if (status !== "ready") return toast(t.playlistFile.addFailed, "error");
+
+      const same = file.id ? playlists.find((p) => p.id === file.id) : undefined;
+      if (same) {
+        // Merge by id: songs it doesn't have yet are added, nothing is removed or duplicated.
+        const result = await api.importLibrary({
+          format: "earful-backup",
+          version: 1,
+          library: {
+            favorites: [],
+            history: [],
+            playlists: [{ id: same.id, name: same.name, createdAt: same.createdAt, updatedAt: Date.now(), tracks: file.tracks }],
+          },
+        }, "merge");
+        await library.load();
+        toast(result.tracksAdded ? t.playlistFile.updated(same.name, result.tracksAdded) : t.playlistFile.upToDate(same.name));
+        navigate(paths.playlist(same.id));
+        closePlaylistFile(file);
+        return;
+      }
+
       const base = file.name.slice(0, 80).trimEnd();
       let name = base;
       let suffix = 2;
@@ -43,7 +66,7 @@ export function PlaylistFileDialog() {
           break;
         }
         if (!matches.length) {
-          const created = await library.createPlaylist(name, file.tracks);
+          const created = await library.createPlaylist(name, file.tracks, file.id);
           if (!created) return;
           navigate(paths.playlist(created.id));
           break;
@@ -67,6 +90,7 @@ export function PlaylistFileDialog() {
             <div className="min-w-0">
               <h3 className="font-semibold break-words">{file.name}</h3>
               <p className="text-sm text-fg-2">{t.common.songs(file.tracks.length)}</p>
+              {mine && <p className="mt-1 text-xs text-accent-text">{t.playlistFile.alreadyHave(mine.name)}</p>}
             </div>
           </div>
           <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -85,7 +109,7 @@ export function PlaylistFileDialog() {
               {t.common.play}
             </button>
             <button type="button" disabled={adding} onClick={() => void add()} className="h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
-              {t.playlistFile.add}
+              {mine ? t.playlistFile.update : t.playlistFile.add}
             </button>
           </div>
         </>

@@ -7,6 +7,11 @@ const MAX_TRACKS = 5000;
 export interface PlaylistFile {
   format: "earful-playlist";
   version: 1;
+  /**
+   * The playlist's own id. Opening a file whose id is already in the library updates that playlist instead of
+   * adding a copy, so friends can keep sending each other the latest version. Files from before 1.6.2 have none.
+   */
+  id?: string;
   name: string;
   exportedAt: string;
   app: string;
@@ -18,6 +23,9 @@ export class PlaylistFileError extends Error {
     super(reason);
   }
 }
+
+/** Same rule as the server's library ids. */
+export const PLAYLIST_ID = /^[\w-]{8,64}$/;
 
 export function isPlaylistFileName(name: string) {
   return /\.earful$/i.test(name);
@@ -72,14 +80,16 @@ export function parsePlaylistFile(data: unknown): PlaylistFile {
   if (file.tracks.length > MAX_TRACKS) throw new PlaylistFileError("tooManyTracks");
   if (!file.tracks.every(isTrack)) throw new PlaylistFileError("invalid");
 
-  return { format: file.format, version: file.version, name: file.name.trim(), exportedAt: file.exportedAt, app: file.app, tracks: file.tracks };
+  const id = typeof file.id === "string" && PLAYLIST_ID.test(file.id) ? file.id : undefined;
+  return { format: file.format, version: file.version, id, name: file.name.trim(), exportedAt: file.exportedAt, app: file.app, tracks: file.tracks };
 }
 
-export function serializePlaylistFile(name: string, tracks: Track[], version: string): string {
+export function serializePlaylistFile(name: string, tracks: Track[], version: string, id?: string): string {
   if (tracks.length > MAX_TRACKS) throw new PlaylistFileError("tooManyTracks");
   const file: PlaylistFile = {
     format: "earful-playlist",
     version: 1,
+    ...(id && PLAYLIST_ID.test(id) ? { id } : {}),
     name: name.trim(),
     exportedAt: new Date().toISOString(),
     app: `Earful ${version}`,

@@ -89,8 +89,8 @@ export const api: EarfulApi = {
   addFavorites: (tracks: Track[]) => request<{ favorites: Track[] }>("/api/favorites", { method: "POST", json: { tracks } }),
   removeFavorite: (id: string) => request<{ favorites: Track[] }>(`/api/favorites/${id}`, { method: "DELETE" }),
   pushHistory: (t: Track) => request<{ history: Track[] }>("/api/history", { method: "POST", json: t }),
-  createPlaylist: (name: string, tracks: Track[] = []) =>
-    request<Playlist>("/api/playlists", { method: "POST", json: { name, tracks } }),
+  createPlaylist: (name: string, tracks: Track[] = [], id?: string) =>
+    request<Playlist>("/api/playlists", { method: "POST", json: { name, tracks, id } }),
   renamePlaylist: (id: string, name: string) => request<Playlist>(`/api/playlists/${id}`, { method: "PATCH", json: { name } }),
   deletePlaylist: (id: string) => request<void>(`/api/playlists/${id}`, { method: "DELETE" }),
   addToPlaylist: (id: string, t: Track | Track[]) =>

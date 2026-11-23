@@ -9,7 +9,7 @@ export interface LyricLine {
 }
 
 export interface Lyrics {
-  source: "lrclib" | "youtube";
+  source: "lrclib" | "netease" | "youtube" | "lyricsovh";
   synced: LyricLine[] | null;
   plain: string | null;
   instrumental?: boolean;
@@ -89,13 +89,79 @@ async function lrclib(t: LyricsTrack): Promise<Lyrics | null> {
   return null;
 }
 
+const loose = (s: string) => s.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^\p{L}\p{N}]+/gu, "");
+
+/** NetEase's credit lines ("作词 : …", "Composer: …") come first in its LRC; they aren't lyrics. */
+const CREDIT = /^(作词|作曲|编曲|制作人|制作|混音|母带|和声|演唱|词|曲|lyricist|lyrics by|composer|composed by|arranger|producer)\s*[:：]/i;
+
+/** NetEase Cloud Music: a big catalog (many Arabic and Asian songs) with time-coded lyrics, no key needed. */
+async function netease(t: LyricsTrack): Promise<Lyrics | null> {
+  const title = cleanTitle(t.title);
+  const artist = t.artist.split(",")[0].trim();
+  if (!title) return null;
+  const get = (url: string) =>
+    (config.fetch ?? fetch)(url, { headers: { Referer: "https://music.163.com/" }, signal: AbortSignal.timeout(8_000) });
+  const params = new URLSearchParams({ s: `${title} ${artist}`.trim(), type: "1", limit: "10" });
+  const found = await get(`https://music.163.com/api/search/get?${params}`);
+  if (!found.ok) throw new Error(`NetEase HTTP ${found.status}`);
+  const songs = ((await found.json()) as { result?: { songs?: { id: number; name: string; duration: number; artists?: { name: string }[] }[] } })
+    .result?.songs ?? [];
+  const want = loose(title);
+  const song = songs.find((s) => {
+    const name = loose(cleanTitle(s.name));
+    const close = !t.duration || Math.abs(s.duration / 1000 - t.duration) <= 4;
+    return close && !!want && (name === want || name.startsWith(want) || want.startsWith(name));
+  });
+  if (!song) return null;
+  const res = await get(`https://music.163.com/api/song/lyric?id=${song.id}&lv=1`);
+  if (!res.ok) throw new Error(`NetEase HTTP ${res.status}`);
+  const body = (await res.json()) as { nolyric?: boolean; pureMusic?: boolean; lrc?: { lyric?: string } };
+  if (body.pureMusic) return { source: "netease", synced: null, plain: null, instrumental: true };
+  const lines = parseLrc(body.lrc?.lyric ?? "").filter((line) => !CREDIT.test(line.text));
+  if (!lines.some((line) => line.text)) return null;
+  // A file where every line sits at 0:00 is plain text in disguise.
+  const timed = lines.some((line) => line.time > 0);
+  return timed
+    ? { source: "netease", synced: lines, plain: null }
+    : { source: "netease", synced: null, plain: lines.map((line) => line.text).join("\n") };
+}
+
+/** lyrics.ovh: plain lyrics by artist and title, the last resort. */
+async function lyricsOvh(t: LyricsTrack): Promise<Lyrics | null> {
+  const title = cleanTitle(t.title);
+  const artist = t.artist.split(",")[0].trim();
+  if (!title || !artist) return null;
+  const res = await (config.fetch ?? fetch)(
+    `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`,
+    { signal: AbortSignal.timeout(8_000) },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`lyrics.ovh HTTP ${res.status}`);
+  const plain = ((await res.json()) as { lyrics?: string }).lyrics?.replace(/\r\n/g, "\n").trim();
+  return plain ? { source: "lyricsovh", synced: null, plain } : null;
+}
+
+/**
+ * Sources in order: LRCLIB (time-coded), NetEase (time-coded), YouTube Music (plain), lyrics.ovh (plain).
+ * A source that fails (down, blocked) is skipped; the request only fails when every source failed.
+ */
 async function load(t: LyricsTrack, lang: Lang): Promise<Lyrics | null> {
-  let lrclibFailed = false;
-  const first = await lrclib(t).catch(() => {
-    lrclibFailed = true;
+  let failures = 0;
+  const attempt = (source: () => Promise<Lyrics | null>) => source().catch(() => {
+    failures++;
     return null;
   });
-  if (first) return first;
+  const synced = (await attempt(() => lrclib(t))) ?? (await attempt(() => netease(t)));
+  if (synced) return synced;
+  const youtube = await attempt(() => youtubeLyrics(t, lang));
+  if (youtube) return youtube;
+  const ovh = await attempt(() => lyricsOvh(t));
+  if (ovh) return ovh;
+  if (failures === 4) throw new HttpError(502, msg("lyricsUnavailable"));
+  return null;
+}
+
+async function youtubeLyrics(t: LyricsTrack, lang: Lang): Promise<Lyrics | null> {
   const plain = await withClient(async (yt) => {
     try {
       return text((await yt.music.getLyrics(t.id))?.description).trim();
@@ -105,12 +171,8 @@ async function load(t: LyricsTrack, lang: Lang): Promise<Lyrics | null> {
       if (e.info === t.id || e.message === "Could not find target tab.") return "";
       throw error;
     }
-  }, lang).catch(() => {
-    throw new HttpError(502, msg("lyricsUnavailable"));
-  });
-  if (plain) return { source: "youtube", synced: null, plain };
-  if (lrclibFailed) throw new HttpError(502, msg("lyricsUnavailable"));
-  return null;
+  }, lang);
+  return plain ? { source: "youtube", synced: null, plain } : null;
 }
 
 export async function lyricsFor(t: LyricsTrack, lang: Lang): Promise<Lyrics | null> {

@@ -54,7 +54,7 @@ export default function Album() {
         actions={
           <>
             {album && (
-              <IconButton label={t.playlistFile.share} onClick={() => void sharePlaylistFile(album.title, tracks)}>
+              <IconButton label={t.playlistFile.share} onClick={() => void sharePlaylistFile(album.title, tracks, `album-${album.id}`)}>
                 <ExportIcon size={20} />
               </IconButton>
             )}

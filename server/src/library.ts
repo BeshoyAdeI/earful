@@ -109,12 +109,19 @@ export async function pushHistory(track: Track): Promise<Track[]> {
   return lib.history;
 }
 
-export async function createPlaylist(name: string, tracks: Track[] = []): Promise<Playlist> {
+export const PLAYLIST_ID = /^[\w-]{8,64}$/;
+
+/**
+ * `id`: keep the id a shared .earful file carries, so a later copy of the same playlist updates this one instead
+ * of adding another. Ignored when invalid or already taken.
+ */
+export async function createPlaylist(name: string, tracks: Track[] = [], id?: string): Promise<Playlist> {
   const lib = await load();
   const clean = name.trim().slice(0, 80);
   if (!clean) throw new HttpError(400, msg("playlistNameRequired"));
   const now = Date.now();
-  const playlist: Playlist = { id: randomUUID(), name: clean, createdAt: now, updatedAt: now, tracks };
+  const keep = typeof id === "string" && PLAYLIST_ID.test(id) && !lib.playlists.some((p) => p.id === id);
+  const playlist: Playlist = { id: keep ? id : randomUUID(), name: clean, createdAt: now, updatedAt: now, tracks };
   lib.playlists.unshift(playlist);
   await persist();
   return playlist;
@@ -191,7 +198,7 @@ function cleanLibrary(input: unknown): Library {
     const now = Date.now();
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : now);
     const id = str(p.id, 64);
-    return [{ id: /^[\w-]{8,64}$/.test(id) ? id : randomUUID(), name, createdAt: num(p.createdAt), updatedAt: num(p.updatedAt), tracks: cleanTracks(p.tracks) }];
+    return [{ id: PLAYLIST_ID.test(id) ? id : randomUUID(), name, createdAt: num(p.createdAt), updatedAt: num(p.updatedAt), tracks: cleanTracks(p.tracks) }];
   });
   return { favorites: cleanTracks(lib.favorites), playlists, history: cleanTracks(lib.history, HISTORY_LIMIT) };
 }

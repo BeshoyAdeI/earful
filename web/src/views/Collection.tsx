@@ -15,6 +15,7 @@ import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
+import { usePlaylistPlays } from "../stores/playlistPlays";
 import { useDownloads } from "../stores/downloads";
 
 interface Props {
@@ -100,7 +101,11 @@ export default function Collection({ kind }: Props) {
           label={playing ? t.common.pause : t.common.playX(name)}
           px={56}
           disabled={!tracks.length}
-          onClick={() => (isThisPlaying ? toggle() : playList(tracks, 0))}
+          onClick={() => {
+            if (isThisPlaying) return toggle();
+            if (playlist) usePlaylistPlays.getState().markPlayed(playlist.id);
+            playList(tracks, 0);
+          }}
         >
           {playing ? <PauseIcon size={24} weight="fill" /> : <PlayIcon size={24} weight="fill" />}
         </PlayDisc>
@@ -110,6 +115,7 @@ export default function Collection({ kind }: Props) {
           disabled={!tracks.length}
           onClick={() => {
             const order = shuffled(tracks);
+            if (playlist) usePlaylistPlays.getState().markPlayed(playlist.id);
             playList(order, 0);
           }}
         >
@@ -155,7 +161,7 @@ export default function Collection({ kind }: Props) {
               type="button"
               onClick={() => {
                 setMoreOpen(false);
-                void sharePlaylistFile(name, tracks);
+                void sharePlaylistFile(name, tracks, playlist?.id);
               }}
               className="flex items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-surface-3"
             >

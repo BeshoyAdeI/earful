@@ -300,9 +300,10 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   app.post("/api/history", async (req) => ({ history: await library.pushHistory(library.sanitizeTrack(req.body)) }));
 
   app.post("/api/playlists", { bodyLimit: 5 * 1024 * 1024 }, async (req) => {
-    const body = (req.body ?? {}) as { name?: unknown; tracks?: unknown };
+    const body = (req.body ?? {}) as { name?: unknown; tracks?: unknown; id?: unknown };
     const tracks = Array.isArray(body.tracks) ? body.tracks.slice(0, 5000).map(library.sanitizeTrack) : [];
-    return library.createPlaylist(typeof body.name === "string" ? body.name : "", tracks);
+    const id = typeof body.id === "string" ? body.id : undefined;
+    return library.createPlaylist(typeof body.name === "string" ? body.name : "", tracks, id);
   });
 
   app.patch("/api/playlists/:pid", async (req) => {

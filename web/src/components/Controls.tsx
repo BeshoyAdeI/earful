@@ -159,7 +159,7 @@ export function FavoriteButton({ track, size = "md" }: { track: Track | null; si
   );
 }
 
-/** Audio / Video segmented switch. For songs, Video plays the song's music video when YouTube has one. */
+/** Audio / Video switch, as two icons. For songs, Video plays the song's music video when YouTube has one. */
 export function ModeSwitch({ className }: { className?: string }) {
   const t = useT();
   const preferVideo = usePlayer((s) => s.preferVideo);
@@ -172,25 +172,34 @@ export function ModeSwitch({ className }: { className?: string }) {
 
   const seg = (on: boolean) =>
     cn(
-      "flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-200",
+      "grid size-9 place-items-center rounded-full transition-colors duration-200",
       on ? "bg-surface-4 text-fg shadow-[inset_0_1px_0_var(--highlight)]" : "text-fg-2 hover:text-fg",
     );
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <div role="radiogroup" aria-label={t.player.mode} className="flex rounded-full bg-surface-1 p-1 ring-1 ring-line">
-        <button type="button" role="radio" aria-checked={!preferVideo} className={seg(!preferVideo)} onClick={() => setPreferVideo(false)}>
-          <MusicNotesIcon size={15} /> {t.player.audio}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={!preferVideo}
+          aria-label={t.player.audio}
+          title={t.player.audio}
+          className={seg(!preferVideo)}
+          onClick={() => setPreferVideo(false)}
+        >
+          <MusicNotesIcon size={17} />
         </button>
         <button
           type="button"
           role="radio"
           aria-checked={preferVideo}
+          aria-label={t.player.video}
           className={seg(preferVideo)}
           onClick={() => setPreferVideo(true)}
           title={t.player.watchClip}
         >
-          <VideoCameraIcon size={15} /> {t.player.video}
+          <VideoCameraIcon size={17} />
         </button>
       </div>
       {showingVideo && (

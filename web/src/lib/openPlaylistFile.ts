@@ -32,11 +32,12 @@ export async function openPlaylistFromDisk(file: File) {
   }
 }
 
-export async function sharePlaylistFile(name: string, tracks: Track[]) {
+/** `id`: the playlist's own id (or a stable one, like an album's), so the receiver's copy can be updated later. */
+export async function sharePlaylistFile(name: string, tracks: Track[], id?: string) {
   const t = getT().playlistFile;
   try {
     const filename = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "").trim().slice(0, 120);
-    await saveFile(`${filename || t.fallbackName}.earful`, serializePlaylistFile(name, tracks, __APP_VERSION__), PLAYLIST_FILE_MIME);
+    await saveFile(`${filename || t.fallbackName}.earful`, serializePlaylistFile(name, tracks, __APP_VERSION__, id), PLAYLIST_FILE_MIME);
   } catch (error) {
     toast(error instanceof PlaylistFileError ? t[error.reason] : t.saveFailed, "error");
   }

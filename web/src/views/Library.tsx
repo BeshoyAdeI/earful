@@ -13,6 +13,7 @@ import { IconButton } from "../components/IconButton";
 import { useLibrary } from "../stores/library";
 import { useDownloads } from "../stores/downloads";
 import { useUi } from "../stores/ui";
+import { byRecentPlay, usePlaylistPlays } from "../stores/playlistPlays";
 
 function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind: CoverKind; tracks: Track[]; sub: string }) {
   return (
@@ -37,7 +38,9 @@ function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind
 }
 
 export default function Library() {
-  const { favorites, playlists, history, createPlaylist } = useLibrary();
+  const { favorites, playlists: stored, history, createPlaylist } = useLibrary();
+  const playedAt = usePlaylistPlays((s) => s.playedAt);
+  const playlists = byRecentPlay(stored, playedAt);
   const offline = useDownloads((s) => s.offlineTracks);
   const [creating, setCreating] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);

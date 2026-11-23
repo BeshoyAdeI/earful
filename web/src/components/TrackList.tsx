@@ -11,6 +11,7 @@ import { useUi } from "../stores/ui";
 import { ArtistLinks } from "./ArtistLinks";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+import { usePlaylistPlays } from "../stores/playlistPlays";
 
 export function DownloadStatus({ track }: { track: Track }) {
   const item = useDownloads((s) => s.items[track.id]);
@@ -178,7 +179,10 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
             position={i}
             playlistId={playlistId}
             showAlbum={showAlbum}
-            onPlay={() => playList(context ?? tracks, i)}
+            onPlay={() => {
+              if (playlistId) usePlaylistPlays.getState().markPlayed(playlistId);
+              playList(context ?? tracks, i);
+            }}
           />
         ))}
       </ul>

@@ -38,6 +38,8 @@ interface UiState {
   settingsOpen: boolean;
   /** Cinema view: the video maximized over everything. */
   theater: boolean;
+  /** Lyrics on the big centered stage instead of the side panel. */
+  lyricsStage: boolean;
   setTheme: (t: Theme) => void;
   toggleTheme: () => void;
   openPanel: (tab: PanelTab) => void;
@@ -53,6 +55,7 @@ interface UiState {
   setShortcutsOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setTheater: (open: boolean) => void;
+  setLyricsStage: (open: boolean) => void;
 }
 
 const readTheme = (): Theme => (document.documentElement.dataset.theme === "light" ? "light" : "dark");
@@ -77,6 +80,7 @@ export const useUi = create<UiState>((set, get) => ({
   shortcutsOpen: false,
   settingsOpen: false,
   theater: false,
+  lyricsStage: false,
 
   setTheme: (theme) => {
     document.documentElement.dataset.theme = theme;
@@ -133,6 +137,7 @@ export const useUi = create<UiState>((set, get) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setTheater: (theater) => set({ theater }),
+  setLyricsStage: (lyricsStage) => set({ lyricsStage }),
 }));
 
 export const toast = (message: string, tone?: Toast["tone"], action?: ToastAction) =>

@@ -52,7 +52,7 @@ export function PlayerBar() {
         </div>
 
         <div className="flex items-center justify-end gap-1">
-          <ModeSwitch className="max-2xl:hidden" />
+          <ModeSwitch className="max-lg:hidden" />
           {track && (
             <IconButton
               label={t.lyrics.title}
