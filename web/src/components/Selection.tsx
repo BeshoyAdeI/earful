@@ -1,5 +1,5 @@
-import { CheckIcon, DownloadSimpleIcon, HeartIcon, PlayIcon, PlaylistIcon, VideoCameraIcon } from "@phosphor-icons/react";
-import { useState, type ReactNode } from "react";
+import { CheckIcon, DotsThreeIcon, DownloadSimpleIcon, HeartIcon, ListPlusIcon, PlayIcon, PlaylistIcon, VideoCameraIcon } from "@phosphor-icons/react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import type { Track } from "../lib/types";
@@ -32,6 +32,7 @@ function Action({
   onClick,
   disabled,
   primary,
+  className,
 }: {
   icon: ReactNode;
   label: string;
@@ -39,6 +40,7 @@ function Action({
   onClick: () => void;
   disabled?: boolean;
   primary?: boolean;
+  className?: string;
 }) {
   return (
     <button
@@ -50,6 +52,7 @@ function Action({
       className={cn(
         "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium whitespace-nowrap transition-transform active:scale-[0.97] disabled:opacity-40 sm:px-3.5",
         primary ? "bg-accent text-accent-ink" : "bg-surface-3 text-fg hover:bg-surface-4",
+        className,
       )}
     >
       {icon}
@@ -95,6 +98,7 @@ export function SelectionBar({
   className?: string;
 }) {
   const playList = usePlayer((s) => s.playList);
+  const addManyToQueue = usePlayer((s) => s.addManyToQueue);
   const addFavorites = useLibrary((s) => s.addFavorites);
   const openAddToPlaylist = useUi((s) => s.openAddToPlaylist);
   const toPlay = chosen.length ? chosen : all;
@@ -107,7 +111,7 @@ export function SelectionBar({
         className,
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <button
           type="button"
           role="checkbox"
@@ -128,7 +132,9 @@ export function SelectionBar({
           disabled={!toPlay.length}
           onClick={() => playList(toPlay, 0)}
         />
-        <Action icon={<HeartIcon size={16} />} label={t.common.favorite} disabled={!chosen.length} onClick={() => void addFavorites(chosen)} />
+        <Action icon={<ListPlusIcon size={16} />} label={t.trackMenu.addToQueue} disabled={!chosen.length} onClick={() => addManyToQueue(chosen)} />
+        {/* The narrowest phones (under 360 px) drop this one to keep the bar on one line; the song menu still has it. */}
+        <Action className="max-[359px]:hidden" icon={<HeartIcon size={16} />} label={t.common.favorite} disabled={!chosen.length} onClick={() => void addFavorites(chosen)} />
         <Action icon={<PlaylistIcon size={16} />} label={t.common.playlist} disabled={!chosen.length} onClick={() => openAddToPlaylist(chosen)} />
         <Action icon={<DownloadSimpleIcon size={16} />} label={t.offline.downloadAll} disabled={!toPlay.length} onClick={() => void useDownloads.getState().download(toPlay)} />
       </div>
@@ -138,7 +144,8 @@ export function SelectionBar({
 
 /**
  * A track row with a checkbox. The artwork plays; the title toggles the selection,
- * so picking many songs is a run of taps on the text.
+ * so picking many songs is a run of taps on the text. The "…" button (or a right-click) opens the song's menu:
+ * play next, add to queue, add to a playlist and the rest.
  */
 export function SelectableRow({
   track,
@@ -161,10 +168,22 @@ export function SelectableRow({
   const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id);
   const isPlaying = usePlayer((s) => s.status === "playing" || s.status === "loading");
   const isFavorite = useLibrary((s) => s.favorites.some((f) => f.id === track.id));
+  const openMenu = useUi((s) => s.openMenu);
   const t = useT();
 
+  const menuAt = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const fromButton = e.type === "click";
+    openMenu({ track, x: fromButton ? r.right - 256 : e.clientX, y: fromButton ? r.bottom + 6 : e.clientY });
+  };
+
   return (
-    <div className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-surface-2 md:px-3">
+    <div
+      onContextMenu={menuAt}
+      className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-surface-2 md:px-3"
+    >
       <button
         type="button"
         role="checkbox"
@@ -214,6 +233,16 @@ export function SelectableRow({
       </span>
 
       {trailing}
+
+      <button
+        type="button"
+        onClick={menuAt}
+        aria-label={t.trackList.moreFor(track.title)}
+        title={t.trackList.more}
+        className="-ml-1 grid size-9 shrink-0 place-items-center rounded-full text-fg-2 transition-[opacity,background-color] hover:bg-surface-3 hover:text-fg md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+      >
+        <DotsThreeIcon size={22} weight="bold" />
+      </button>
     </div>
   );
 }

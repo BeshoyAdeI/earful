@@ -45,6 +45,8 @@ interface PlayerState {
   playTrack: (track: Track) => void;
   playNext: (track: Track) => void;
   addToQueue: (track: Track) => void;
+  /** Adds several tracks to the end of the queue (the selection bar), with one notice. */
+  addManyToQueue: (tracks: Track[]) => void;
   removeAt: (i: number) => void;
   jumpTo: (i: number) => void;
   clearUpcoming: () => void;
@@ -579,6 +581,15 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (!s.queue.length) return get().playList([track]);
       set({ queue: [...s.queue, track], original: s.original ? [...s.original, track] : null });
       toast(getT().player.addedToQueue(track.title));
+    },
+
+    addManyToQueue: (tracks) => {
+      if (tracks.length === 1) return get().addToQueue(tracks[0]);
+      const s = get();
+      if (!tracks.length) return;
+      if (!s.queue.length) return get().playList(tracks);
+      set({ queue: [...s.queue, ...tracks], original: s.original ? [...s.original, ...tracks] : null });
+      toast(getT().player.addedManyToQueue(tracks.length));
     },
 
     removeAt: (i) => {
