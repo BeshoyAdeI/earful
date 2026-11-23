@@ -1,3 +1,4 @@
+import { ArtistLinks } from "./ArtistLinks";
 import { ArrowsInIcon, ArrowsOutIcon, ArrowsOutSimpleIcon, CornersInIcon, CornersOutIcon, XIcon } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
@@ -232,7 +233,7 @@ export function Theater() {
             <div className="pointer-events-auto flex items-start gap-3 pt-3">
               <div className="min-w-0 flex-1 text-white">
                 <p className="truncate text-lg font-semibold tracking-tight md:text-xl">{track.title}</p>
-                <p className="truncate text-sm text-white/70">{statusText ?? track.artist}</p>
+                <p className="truncate text-sm text-white/70">{statusText ?? <ArtistLinks track={track} onNavigate={() => void close()} />}</p>
               </div>
               <IconButton
                 label={fullscreen ? t.video.exitFullscreen : t.video.fullscreen}

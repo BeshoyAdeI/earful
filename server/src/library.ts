@@ -1,5 +1,5 @@
 import { msg } from "./i18n.js";
-import { HttpError, VIDEO_ID, type Library, type Playlist, type Track } from "./types.js";
+import { ARTIST_ID, HttpError, VIDEO_ID, type Library, type Playlist, type Track } from "./types.js";
 
 // No Node-only imports here: the Android app runs this same module, with its own storage.
 
@@ -48,10 +48,18 @@ export function sanitizeTrack(input: unknown): Track {
     const s = str(v, 500);
     return /^https:\/\//.test(s) ? s : "";
   };
+  const artists = Array.isArray(t.artists) ? t.artists.slice(0, 10).flatMap((artist) => {
+    if (!artist || typeof artist.name !== "string") return [];
+    const name = artist.name.trim();
+    if (!name || name.length > 200) return [];
+    const id = typeof artist.id === "string" && ARTIST_ID.test(artist.id) ? artist.id : undefined;
+    return [{ name, id }];
+  }) : undefined;
   return {
     id,
     title: str(t.title, 300) || "Untitled",
     artist: str(t.artist, 300),
+    artists: artists?.length ? artists : undefined,
     album: str(t.album, 300) || undefined,
     duration: typeof t.duration === "number" && Number.isFinite(t.duration) ? Math.max(0, Math.round(t.duration)) : 0,
     thumb: url(t.thumb),

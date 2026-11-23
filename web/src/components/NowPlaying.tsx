@@ -1,6 +1,7 @@
 import {
   CaretDownIcon,
   MagnifyingGlassIcon,
+  MicrophoneStageIcon,
   QueueIcon,
   RadioIcon,
   VideoCameraSlashIcon,
@@ -9,14 +10,17 @@ import {
 import { AnimatePresence, motion, useDragControls, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { MD, XL, useMediaQuery } from "../hooks/useMediaQuery";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useUi, type PanelTab } from "../stores/ui";
+import { ArtistLinks } from "./ArtistLinks";
 import { Artwork } from "./Artwork";
 import { FavoriteButton, ModeSwitch, Scrubber, Transport } from "./Controls";
 import { IconButton } from "./IconButton";
+import { LyricsView } from "./LyricsView";
 import { QueueList } from "./Queue";
 import { SLOT, VideoSlot } from "./Video";
 
@@ -71,7 +75,7 @@ function Stage({ track, slot, className }: { track: Track; slot: number; classNa
   );
 }
 
-function TrackHeading({ track, large = false }: { track: Track; large?: boolean }) {
+function TrackHeading({ track, large = false, onArtistNavigate }: { track: Track; large?: boolean; onArtistNavigate?: () => void }) {
   const statusText = useStatusText();
   const status = usePlayer((s) => s.status);
   return (
@@ -79,7 +83,12 @@ function TrackHeading({ track, large = false }: { track: Track; large?: boolean 
       <div className="min-w-0 flex-1">
         <h2 className={cn("truncate font-semibold tracking-tight", large ? "text-[22px] leading-tight" : "text-lg")}>{track.title}</h2>
         <p className={cn("truncate", large ? "text-base" : "text-sm", status === "error" ? "text-danger" : "text-fg-2")}>
-          {statusText ?? [track.artist, track.album].filter(Boolean).join(" · ")}
+          {statusText ?? (
+            <>
+              <ArtistLinks track={track} onNavigate={onArtistNavigate} />
+              {track.album && (track.artist ? ` · ${track.album}` : track.album)}
+            </>
+          )}
         </p>
       </div>
       <FavoriteButton track={track} size={large ? "lg" : "md"} />
@@ -87,22 +96,23 @@ function TrackHeading({ track, large = false }: { track: Track; large?: boolean 
   );
 }
 
-function PanelBody({ tab, slot }: { tab: PanelTab; slot: number }) {
+function PanelBody({ tab, slot, onArtistNavigate }: { tab: PanelTab; slot: number; onArtistNavigate?: () => void }) {
   const track = usePlayer(selectCurrent);
   const startRadio = usePlayer((s) => s.startRadio);
   const queue = usePlayer((s) => s.queue);
   const index = usePlayer((s) => s.index);
   const t = useT();
 
-  if (tab === "queue") return <QueueList />;
+  if (tab === "queue") return <QueueList onArtistNavigate={onArtistNavigate} />;
   if (!track) {
     return <p className="px-2 py-16 text-center text-sm text-fg-2">{t.nowPlaying.playSomething}</p>;
   }
+  if (tab === "lyrics") return <LyricsView track={track} />;
   const nextUp = queue[index + 1];
   return (
     <div className="flex flex-col gap-5 px-1 pb-4">
       <Stage track={track} slot={slot} />
-      <TrackHeading track={track} />
+      <TrackHeading track={track} onArtistNavigate={onArtistNavigate} />
       <ModeSwitch />
       <button
         type="button"
@@ -118,7 +128,7 @@ function PanelBody({ tab, slot }: { tab: PanelTab; slot: number }) {
             <Artwork src={nextUp.thumb} className="size-10 rounded-[8px]" />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{nextUp.title}</p>
-              <p className="truncate text-xs text-fg-2">{nextUp.artist}</p>
+              <p className="truncate text-xs text-fg-2"><ArtistLinks track={nextUp} onNavigate={onArtistNavigate} /></p>
             </div>
           </div>
         </div>
@@ -135,6 +145,7 @@ function PanelTabs({ tab, onTab }: { tab: PanelTab; onTab: (t: PanelTab) => void
         [
           ["playing", t.nowPlaying.tabPlaying],
           ["queue", t.nowPlaying.tabQueue],
+          ["lyrics", t.lyrics.title],
         ] as const
       ).map(([id, label]) => (
         <button
@@ -157,20 +168,22 @@ function PanelTabs({ tab, onTab }: { tab: PanelTab; onTab: (t: PanelTab) => void
 
 /** Docked right column (≥1280px). */
 export function SidePanel() {
+  const isWide = useMediaQuery(XL);
   const tab = useUi((s) => s.panelTab);
   const openPanel = useUi((s) => s.openPanel);
   const togglePanel = useUi((s) => s.togglePanel);
   const t = useT();
+  if (!isWide) return null;
   return (
     <aside className="island hidden w-[360px] shrink-0 xl:flex" aria-label={t.nowPlaying.panel}>
       <div className="island-core flex w-full flex-col overflow-hidden">
-        <div className="flex h-16 items-center justify-between px-3">
+        <div className="flex h-16 shrink-0 items-center justify-between px-3">
           <PanelTabs tab={tab} onTab={openPanel} />
           <IconButton label={t.nowPlaying.closePanel} size="sm" onClick={() => togglePanel(tab)}>
             <XIcon size={18} />
           </IconButton>
         </div>
-        <div className="scroll-area flex-1 overflow-y-auto px-2">
+        <div className={cn("min-h-0 flex-1 px-2", tab === "lyrics" ? "overflow-hidden" : "scroll-area overflow-y-auto")}>
           <PanelBody tab={tab} slot={SLOT.panel} />
         </div>
       </div>
@@ -180,7 +193,9 @@ export function SidePanel() {
 
 /** Same content as an overlay drawer for tablets and small laptops (768-1279px). */
 export function PanelDrawer() {
-  const open = useUi((s) => s.drawerOpen);
+  const isDesktop = useMediaQuery(MD);
+  const isWide = useMediaQuery(XL);
+  const open = useUi((s) => s.drawerOpen) && isDesktop && !isWide;
   const tab = useUi((s) => s.panelTab);
   const openPanel = useUi((s) => s.openPanel);
   const close = useUi((s) => s.closePanel);
@@ -209,14 +224,14 @@ export function PanelDrawer() {
             className="island drawer-top absolute right-2 bottom-2 flex w-[380px] max-w-[calc(100vw-16px)]"
           >
             <div className="island-core flex w-full flex-col overflow-hidden">
-              <div className="flex h-16 items-center justify-between px-3">
+              <div className="flex h-16 shrink-0 items-center justify-between px-3">
                 <PanelTabs tab={tab} onTab={openPanel} />
                 <IconButton label={t.common.close} size="sm" onClick={close}>
                   <XIcon size={18} />
                 </IconButton>
               </div>
-              <div className="scroll-area flex-1 overflow-y-auto px-2">
-                <PanelBody tab={tab} slot={SLOT.panel} />
+              <div className={cn("min-h-0 flex-1 px-2", tab === "lyrics" ? "overflow-hidden" : "scroll-area overflow-y-auto")}>
+                <PanelBody tab={tab} slot={SLOT.panel} onArtistNavigate={close} />
               </div>
             </div>
           </motion.aside>
@@ -232,7 +247,7 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
   const track = usePlayer(selectCurrent);
   const reduce = useReducedMotion();
   const drag = useDragControls();
-  const [view, setView] = useState<"player" | "queue">("player");
+  const [view, setView] = useState<"player" | "queue" | "lyrics">("player");
   const t = useT();
 
   return createPortal(
@@ -264,12 +279,23 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
           />
           <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-transparent via-bg/70 to-bg" />
 
-          <div className="overlay-top relative flex flex-1 flex-col px-5">
-            <div className="flex h-14 touch-none items-center justify-between" onPointerDown={(e) => drag.start(e)}>
+          <div className="overlay-top relative flex min-h-0 flex-1 flex-col px-5">
+            <div
+              className="flex h-14 shrink-0 touch-none items-center justify-between"
+              onPointerDown={(e) => { if (!(e.target as Element).closest("button")) drag.start(e); }}
+            >
               <IconButton label={t.common.close} onClick={onClose} className="-ml-2 text-fg">
                 <CaretDownIcon size={24} />
               </IconButton>
-              <div className="mx-auto mt-0 h-1 w-10 rounded-full bg-fg-3/50" />
+              <div className="pointer-events-none absolute left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-fg-3/50" />
+              <div className="flex-1" />
+              <IconButton
+                label={view === "lyrics" ? t.nowPlaying.backToPlayer : t.lyrics.title}
+                active={view === "lyrics"}
+                onClick={() => setView(view === "lyrics" ? "player" : "lyrics")}
+              >
+                <MicrophoneStageIcon size={22} />
+              </IconButton>
               <IconButton
                 label={view === "queue" ? t.nowPlaying.backToPlayer : t.nowPlaying.showQueue}
                 active={view === "queue"}
@@ -281,15 +307,21 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
             </div>
 
             {view === "queue" ? (
-              <div className="scroll-area -mx-3 flex-1 overflow-y-auto pb-6">
+              <div className="scroll-area -mx-3 min-h-0 flex-1 overflow-y-auto pb-6">
                 <QueueList />
               </div>
             ) : (
-              <div className="flex flex-1 flex-col justify-evenly gap-4 pb-[calc(16px+env(safe-area-inset-bottom))]">
-                <div className="touch-none" onPointerDown={(e) => drag.start(e)}>
-                  <Stage track={track} slot={SLOT.sheet} className="max-w-[min(100%,46dvh)]" />
-                </div>
-                <div className="flex flex-col gap-4">
+              <div className="flex min-h-0 flex-1 flex-col justify-evenly gap-4 pb-[calc(16px+env(safe-area-inset-bottom))]">
+                {view === "lyrics" ? (
+                  <div className="min-h-0 flex-1 overflow-hidden">
+                    <LyricsView track={track} />
+                  </div>
+                ) : (
+                  <div className="touch-none" onPointerDown={(e) => drag.start(e)}>
+                    <Stage track={track} slot={SLOT.sheet} className="max-w-[min(100%,46dvh)]" />
+                  </div>
+                )}
+                <div className="flex shrink-0 flex-col gap-4">
                   <TrackHeading track={track} large />
                   <Scrubber touch />
                   <Transport big />

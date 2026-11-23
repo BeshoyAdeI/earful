@@ -295,6 +295,15 @@ export const en = {
     noSongsBody: "Try another genre.",
   },
 
+  lyrics: {
+    title: "Lyrics",
+    loading: "Loading lyrics",
+    empty: "No lyrics for this song",
+    instrumental: "Instrumental",
+    error: "Could not load lyrics",
+    lrclib: "Lyrics from LRCLIB",
+    youtube: "Lyrics from YouTube Music",
+  },
   artist: {
     fallbackName: "Artist",
     label: "Artist",

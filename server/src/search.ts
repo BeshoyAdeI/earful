@@ -2,7 +2,7 @@ import { Innertube } from "youtubei.js";
 import { config } from "./config.js";
 import { msg, youtubeLang, type Lang } from "./i18n.js";
 import type { Track } from "./types.js";
-import { HttpError, VIDEO_ID } from "./types.js";
+import { ARTIST_ID, HttpError, VIDEO_ID } from "./types.js";
 import { ytdlpSearch } from "./ytdlp.js";
 
 // One session per language: YouTube Music words its own texts (genre names, artist bios) in the session's language.
@@ -48,12 +48,22 @@ function videoThumbs(id: string) {
 
 export const text = (v: unknown): string => (v == null ? "" : typeof v === "string" ? v : String((v as { toString(): string }).toString()));
 
+export function trackArtists(items: { name?: unknown; channel_id?: unknown; id?: unknown }[]): NonNullable<Track["artists"]> {
+  return items.flatMap((item) => {
+    const name = text(item?.name).trim();
+    if (!name) return [];
+    const id = [item.channel_id, item.id].find((value): value is string => typeof value === "string" && ARTIST_ID.test(value));
+    return [{ name, id }];
+  });
+}
+
 // youtubei.js node shapes differ between item types, so read them defensively.
 export function toTrack(item: any, kind: Track["kind"]): Track | null {
   const id: string | undefined = item.id ?? item.video_id;
   if (!id || !VIDEO_ID.test(id)) return null;
-  const artists: string[] = (item.artists ?? item.authors ?? []).map((a: { name: string }) => a.name).filter(Boolean);
-  const artist = artists.join(", ") || text(item.author?.name) || "";
+  const artists = trackArtists(item.artists ?? item.authors ?? []);
+  if (!artists.length && item.author) artists.push(...trackArtists([item.author]));
+  const artist = artists.map((a) => a.name).join(", ");
   const thumbs = item.thumbnail?.contents ?? item.thumbnail ?? item.thumbnails ?? [];
   const best = Array.isArray(thumbs) ? thumbs[0]?.url : undefined;
   const isSquare = typeof best === "string" && /googleusercontent\.com|ggpht\.com/.test(best);
@@ -62,6 +72,7 @@ export function toTrack(item: any, kind: Track["kind"]): Track | null {
     id,
     title: text(item.title) || text(item.name),
     artist,
+    artists: artists.length ? artists : undefined,
     album: item.album?.name || undefined,
     duration: item.duration?.seconds ?? 0,
     ...images,

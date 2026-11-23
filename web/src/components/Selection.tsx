@@ -6,6 +6,7 @@ import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
+import { ArtistLinks } from "./ArtistLinks";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
 
@@ -188,16 +189,19 @@ export function SelectableRow({
         </span>
       </button>
 
-      <button type="button" onClick={onToggle} className={cn("min-w-0 flex-1 text-left", !selected && "opacity-60")}>
-        <span className={cn("block truncate text-[15px] leading-tight font-medium", isCurrent && "text-accent-text")}>{track.title}</span>
-        <span className="mt-0.5 flex items-center gap-1.5 text-[13px] text-fg-2">
-          {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
-          <span className="truncate">
-            {track.artist || t.common.youtube}
-            {note}
+      <div className={cn("relative min-w-0 flex-1 text-left", !selected && "opacity-60")}>
+        <button type="button" onClick={onToggle} className="absolute inset-0" aria-label={t.selection.select(track.title)} />
+        <div className="pointer-events-none">
+          <span className={cn("block truncate text-[15px] leading-tight font-medium", isCurrent && "text-accent-text")}>{track.title}</span>
+          <span className="mt-0.5 flex items-center gap-1.5 text-[13px] text-fg-2">
+            {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
+            <span className="truncate">
+              <ArtistLinks track={track} fallback={t.common.youtube} />
+              {note}
+            </span>
           </span>
-        </span>
-      </button>
+        </div>
+      </div>
 
       {isFavorite && <HeartIcon size={15} weight="fill" className="shrink-0 text-accent-text" aria-label={t.common.inFavorites} />}
 

@@ -1,6 +1,7 @@
 import { desktop } from "../lib/desktop";
 import { cn } from "../lib/format";
 import { selectCurrent, usePlayer } from "../player/player";
+import { ArtistLinks } from "./ArtistLinks";
 import { Equalizer, LogoMark } from "./Brand";
 
 /**
@@ -27,7 +28,7 @@ export function TitleBar() {
           <Equalizer live={live} className="h-3 shrink-0" />
           <span className="truncate">
             {track.title}
-            {track.artist && <span className="text-fg-3/70"> - {track.artist}</span>}
+            {track.artist && <span className="text-fg-3/70"> - <ArtistLinks track={track} /></span>}
           </span>
         </span>
       )}

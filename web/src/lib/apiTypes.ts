@@ -1,4 +1,4 @@
-import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
+import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Lyrics, Playlist, Track } from "./types";
 
 /**
  * What the app needs from a backend. The web app and the desktop app talk to the Earful server over HTTP
@@ -72,6 +72,8 @@ export interface EarfulApi {
   genres(): Promise<Genre[]>;
   genre(id: string, signal?: AbortSignal): Promise<GenrePage>;
   genreArtists(id: string, offset: number): Promise<{ artists: GenreArtist[]; hasMore: boolean }>;
+  artistId(name: string): Promise<string | null>;
+  lyrics(track: Track): Promise<Lyrics | null>;
   artist(id: string, signal?: AbortSignal): Promise<ArtistPage>;
   album(id: string, signal?: AbortSignal): Promise<AlbumPage>;
   searchAlbums(q: string, signal?: AbortSignal): Promise<AlbumCard[]>;

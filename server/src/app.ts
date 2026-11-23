@@ -2,8 +2,9 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
-import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
+import { ALBUM_ID, album, ARTIST_ID, artist, artistId, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
 import { config } from "./config.js";
+import { lyricsFor } from "./lyrics.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
@@ -97,6 +98,25 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     if (!GENRE_ID.test(gid)) throw new HttpError(400, msg("invalidGenre"));
     if (!Number.isInteger(offset) || offset < 0 || offset > 1000) throw new HttpError(400, msg("invalidOffset"));
     return genreArtists(gid, offset, langOf(req));
+  });
+
+  app.get("/api/artist-id", async (req) => {
+    const { name } = req.query as { name?: string };
+    return { id: await artistId(query(name), langOf(req)) };
+  });
+
+  app.get("/api/lyrics/:id", async (req) => {
+    const { title, artist, album, duration } = req.query as Record<string, unknown>;
+    const field = (value: unknown) => typeof value === "string" ? value.trim().slice(0, 300) : "";
+    const lyrics = await lyricsFor({
+      id: videoId(req.params),
+      title: field(title),
+      artist: field(artist),
+      album: field(album),
+      duration: Number(field(duration)) || 0,
+    }, langOf(req));
+    if (!lyrics) throw new HttpError(404, msg("noLyrics"));
+    return lyrics;
   });
 
   app.get("/api/artists/:aid", async (req) => {

@@ -4,6 +4,7 @@ import { cn } from "../lib/format";
 import { useT } from "../i18n";
 import { NOW_PLAYING_HASH, paths } from "../lib/routes";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
+import { ArtistLinks } from "./ArtistLinks";
 import { Artwork } from "./Artwork";
 import { PlayPauseIcon } from "./Controls";
 
@@ -72,17 +73,18 @@ export function MiniPlayer() {
           <button
             type="button"
             onClick={() => navigate({ hash: NOW_PLAYING_HASH })}
-            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            className="absolute inset-y-0 left-0 right-12"
             aria-label={t.player.openNowPlaying(track.title)}
-          >
+          />
+          <div className="pointer-events-none flex min-w-0 flex-1 items-center gap-3 text-left">
             <Artwork src={track.thumb} className="size-11 rounded-[10px]" />
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium">{track.title}</span>
               <span className={cn("block truncate text-xs", status === "error" ? "text-danger" : "text-fg-2")}>
-                {statusText ?? track.artist}
+                {statusText ?? <ArtistLinks track={track} />}
               </span>
             </span>
-          </button>
+          </div>
           <button
             type="button"
             onClick={toggle}

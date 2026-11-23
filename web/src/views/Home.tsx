@@ -1,6 +1,7 @@
 import { ClockCounterClockwiseIcon, HeartIcon, MagnifyingGlassIcon, PlayIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
+import { ArtistLinks } from "../components/ArtistLinks";
 import { Artwork } from "../components/Artwork";
 import { LogoMark } from "../components/Brand";
 import { PageHeader, Section } from "../components/Page";
@@ -35,19 +36,21 @@ function Shortcut({ to, label, tracks, cover }: { to: string; label: string; tra
 }
 
 function RecentCard({ track, onPlay }: { track: Track; onPlay: () => void }) {
+  const t = useT();
   return (
-    <button type="button" onClick={onPlay} className="group flex w-36 shrink-0 snap-start flex-col gap-2 text-left md:w-44">
-      <span className="relative block">
+    <div className="group relative flex w-36 shrink-0 snap-start flex-col gap-2 text-left md:w-44">
+      <button type="button" onClick={onPlay} aria-label={t.common.playX(track.title)} className="peer absolute inset-0" />
+      <span className="pointer-events-none relative block peer-focus-visible:[&>span]:opacity-100">
         <Artwork src={track.art} fallback={track.thumb} className="aspect-square w-full rounded-[14px]" />
-        <span className="absolute right-2 bottom-2 grid size-11 translate-y-1 place-items-center rounded-full bg-accent text-accent-ink opacity-0 shadow-[0_8px_20px_rgb(0_0_0/0.4)] transition-[opacity,transform] duration-200 ease-out-expo group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:opacity-100">
+        <span className="absolute right-2 bottom-2 grid size-11 translate-y-1 place-items-center rounded-full bg-accent text-accent-ink opacity-0 shadow-[0_8px_20px_rgb(0_0_0/0.4)] transition-[opacity,transform] duration-200 ease-out-expo group-hover:translate-y-0 group-hover:opacity-100">
           <PlayIcon size={20} weight="fill" />
         </span>
       </span>
-      <span className="min-w-0">
+      <span className="pointer-events-none min-w-0">
         <span className="block truncate text-sm font-medium">{track.title}</span>
-        <span className="block truncate text-xs text-fg-2">{track.artist}</span>
+        <span className="block truncate text-xs text-fg-2"><ArtistLinks track={track} /></span>
       </span>
-    </button>
+    </div>
   );
 }
 

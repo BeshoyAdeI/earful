@@ -1,8 +1,9 @@
-import { KeyboardIcon, QueueIcon, SidebarSimpleIcon } from "@phosphor-icons/react";
+import { KeyboardIcon, MicrophoneStageIcon, QueueIcon, SidebarSimpleIcon } from "@phosphor-icons/react";
 import { cn } from "../lib/format";
 import { useT } from "../i18n";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useUi } from "../stores/ui";
+import { ArtistLinks } from "./ArtistLinks";
 import { Artwork } from "./Artwork";
 import { FavoriteButton, ModeSwitch, Scrubber, Transport, Volume } from "./Controls";
 import { IconButton } from "./IconButton";
@@ -35,7 +36,7 @@ export function PlayerBar() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{track.title}</p>
                 <p className={cn("truncate text-[13px]", status === "error" ? "text-danger" : "text-fg-2")}>
-                  {statusText ?? track.artist}
+                  {statusText ?? <ArtistLinks track={track} />}
                 </p>
               </div>
               <FavoriteButton track={track} size="sm" />
@@ -52,6 +53,16 @@ export function PlayerBar() {
 
         <div className="flex items-center justify-end gap-1">
           <ModeSwitch className="max-2xl:hidden" />
+          {track && (
+            <IconButton
+              label={t.lyrics.title}
+              size="sm"
+              active={panelOpen && panelTab === "lyrics"}
+              onClick={() => togglePanel("lyrics")}
+            >
+              <MicrophoneStageIcon size={18} />
+            </IconButton>
+          )}
           <IconButton
             label={t.player.queue}
             size="sm"

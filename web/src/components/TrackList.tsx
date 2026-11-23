@@ -7,6 +7,7 @@ import { selectCurrent, usePlayer } from "../player/player";
 import { useAppearance } from "../stores/appearance";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
+import { ArtistLinks } from "./ArtistLinks";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
 
@@ -70,7 +71,7 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-fg-2">
           {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
-          <span className="truncate">{track.artist || t.common.youtube}</span>
+          <span className="truncate"><ArtistLinks track={track} fallback={t.common.youtube} /></span>
         </p>
       </div>
 

@@ -2,10 +2,11 @@ import { QueueIcon, XIcon } from "@phosphor-icons/react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import { usePlayer } from "../player/player";
+import { ArtistLinks } from "./ArtistLinks";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
 
-export function QueueList({ compact = false }: { compact?: boolean }) {
+export function QueueList({ compact = false, onArtistNavigate }: { compact?: boolean; onArtistNavigate?: () => void }) {
   const t = useT();
   const queue = usePlayer((s) => s.queue);
   const index = usePlayer((s) => s.index);
@@ -39,7 +40,7 @@ export function QueueList({ compact = false }: { compact?: boolean }) {
         <Artwork src={track.thumb} className="pointer-events-none size-10 rounded-[8px]" />
         <div className="pointer-events-none min-w-0 flex-1">
           <p className={cn("truncate text-sm font-medium", isCurrent ? "text-accent-text" : "text-fg")}>{track.title}</p>
-          <p className="truncate text-xs text-fg-2">{track.artist}</p>
+          <p className="truncate text-xs text-fg-2"><ArtistLinks track={track} onNavigate={onArtistNavigate} /></p>
         </div>
         {isCurrent ? (
           <Equalizer live={live} className="mr-2" />
