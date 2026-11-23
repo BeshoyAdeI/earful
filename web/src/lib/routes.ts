@@ -7,6 +7,7 @@ export const paths = {
   artist: (id: string) => `/search/artist/${id}`,
   album: (id: string) => `/search/album/${id}`,
   library: "/library",
+  profile: "/profile",
   favorites: "/favorites",
   history: "/history",
   offline: "/collection/offline",
@@ -23,6 +24,7 @@ const LEGACY_PATHS: [string, string][] = [
   ["/buscar/artista/", "/search/artist/"],
   ["/buscar", paths.search],
   ["/biblioteca", paths.library],
+  ["/perfil", paths.profile],
   ["/favoritas", paths.favorites],
   ["/historico", paths.history],
 ];

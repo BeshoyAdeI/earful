@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { getT, useT } from "../i18n";
-import { api, capabilities, explainStreamError, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
+import { api, capabilities, explainStreamError, streamSource, systemMedia, type ApiError, type ErrorCode, type PlayEvent } from "../lib/api";
 import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
 import type { Track } from "../lib/types";
@@ -80,6 +80,61 @@ let token = 0;
 let recordedToken = -1;
 
 const STORAGE_KEY = "earful:player";
+let listening: PlayEvent | undefined;
+let lastListenTime: number | undefined;
+let listenTrack: Track | undefined;
+
+/** Start the next listening event at the point where history is cleared. */
+export function discardCurrentListen() {
+  listening = undefined;
+  lastListenTime = undefined;
+}
+
+/**
+ * `continuing`: the page is being hidden (minimized, phone locked) and the music may well keep playing. The listen
+ * so far is saved in case the app is closed, but it keeps counting: the next report for the same song carries the
+ * same start time, and the server keeps one event per song and start time, so a minimize doesn't make two plays.
+ */
+function flushListen({ closing = false, continuing = false } = {}) {
+  const event = listening;
+  if (continuing && (!event || event.sec < 10)) return;
+  if (!continuing) {
+    listening = undefined;
+    listenTrack = undefined;
+    lastListenTime = undefined;
+  }
+  if (!event || event.sec < 10) return;
+  const copy = { ...event };
+  if (closing && api.recordPlayBeacon?.(copy)) return;
+  void api.recordPlay(copy).then(() => window.dispatchEvent(new Event("earful:play-recorded"))).catch(() => {});
+}
+
+function startListening(track: Track, media: HTMLMediaElement) {
+  if (listenTrack?.id !== track.id) {
+    listenTrack = track;
+    listening = undefined;
+  }
+  listening ??= newListen(track);
+  if (lastListenTime === undefined) lastListenTime = media.currentTime;
+}
+
+function newListen({ id, title, artist, artists, album, thumb, duration }: Track): PlayEvent {
+  return { id, title, artist, artists, album, thumb, duration, at: Date.now(), sec: 0 };
+}
+
+function countListening(media: HTMLMediaElement, playing: boolean) {
+  const current = media.currentTime;
+  const delta = current - (lastListenTime ?? current);
+  lastListenTime = current;
+  if (!listenTrack || !playing || media.paused || media.seeking || !(delta > 0 && delta < 2.5)) return;
+  listening ??= newListen(listenTrack);
+  listening.sec += delta;
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") flushListen({ closing: true, continuing: true });
+});
+window.addEventListener("pagehide", () => flushListen({ closing: true, continuing: true }));
 
 interface Saved {
   queue: Track[];
@@ -195,6 +250,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const s = get();
     const track = s.queue[index];
     if (!track) return;
+    flushListen();
     // The next track's download may still be running (a skip at 85%): give it a moment to land so it plays from
     // disk, but never hold the start for the whole download — the stream works meanwhile.
     const ready = !s.preferVideo && warming?.id === track.id
@@ -325,11 +381,14 @@ export const usePlayer = create<PlayerState>((set, get) => {
   }
 
   function onEnded() {
+    const track = listenTrack;
+    flushListen();
     const s = get();
     if (s.repeat === "one") {
       const media = activeMedia();
       if (media) {
         media.currentTime = 0;
+        if (track) listenTrack = track;
         play(media);
       }
       return;
@@ -344,6 +403,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
   /** Shows why a track can't play, then moves on (unless every track would fail the same way). */
   function report(message: string, code?: ErrorCode) {
     const mine = token;
+    flushListen();
     set({ status: "error", statusText: { error: message } });
     const track = get().queue[get().index];
     // Tool problems hit every track: offer the fix instead of skipping through the whole queue.
@@ -396,20 +456,27 @@ export const usePlayer = create<PlayerState>((set, get) => {
     });
     media.addEventListener("playing", () => {
       if (!isActive()) return;
+      const track = get().queue[get().index];
+      if (track && loaded?.id === track.id) startListening(track, media);
       set({ status: "playing", statusText: null });
       onStarted();
       syncPlaybackState();
     });
     media.addEventListener("pause", () => {
       if (!isActive() || media.ended || get().status === "loading" || get().status === "error") return;
+      lastListenTime = undefined;
       set({ status: "paused" });
       syncPlaybackState();
     });
     media.addEventListener("waiting", () => {
-      if (isActive() && !media.paused) set({ status: "loading" });
+      if (isActive() && !media.paused) {
+        lastListenTime = undefined;
+        set({ status: "loading" });
+      }
     });
     media.addEventListener("timeupdate", () => {
       if (!isActive() || pendingSeek > 0) return;
+      countListening(media, get().status === "playing");
       if (Math.abs(media.currentTime - get().position) >= 0.2) set({ position: media.currentTime });
       warmNext(media);
       syncSystemMedia(); // throttled on the other side
@@ -418,8 +485,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (!isActive() || !media.buffered.length) return;
       set({ buffered: media.buffered.end(media.buffered.length - 1) });
     });
+    media.addEventListener("seeking", () => {
+      if (isActive()) lastListenTime = undefined;
+    });
     media.addEventListener("seeked", () => {
       if (!isActive()) return;
+      lastListenTime = media.currentTime;
       syncPositionState();
       if (reportsPlayback) scheduleNowPlaying();
     });
@@ -522,6 +593,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
       set({ queue, original });
       if (queue[i]) load(i, { autoplay: s.status === "playing" });
       else {
+        flushListen();
+        token++;
         dropPreload();
         activeMedia()?.pause();
         loaded = null;
@@ -587,6 +660,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         pendingSeek = t;
         return;
       }
+      lastListenTime = undefined;
       media.currentTime = t;
     },
 

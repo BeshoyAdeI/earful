@@ -48,12 +48,19 @@ export function inkFor(hex: string): string {
   return contrast(base, BLACK) >= contrast(base, WHITE) ? "#0b0c0f" : "#ffffff";
 }
 
+const accentText = (color: Rgb, theme: "dark" | "light") =>
+  theme === "dark" ? readable(color, WHITE, DARK_SURFACE) : readable(color, BLACK, LIGHT_SURFACE);
+
+export function accentTextFor(hex: string, theme: "dark" | "light"): string {
+  return toHex(accentText(toRgb(hex), theme));
+}
+
 /** CSS that overrides the theme's accent variables. Selectors outrank styles.css whatever the load order. */
 export function accentCss(hex: string): string {
   const base = toRgb(hex);
   const ink = inkFor(hex);
-  const darkText = readable(base, WHITE, DARK_SURFACE);
-  const lightText = readable(base, BLACK, LIGHT_SURFACE);
+  const darkText = accentText(base, "dark");
+  const lightText = accentText(base, "light");
   const rgb = (c: Rgb) => c.map(Math.round).join(" ");
   return (
     `html:root,html[data-theme="dark"]{--accent:${hex};--accent-ink:${ink};--accent-text:${toHex(darkText)};--accent-soft:rgb(${rgb(base)} / 0.13)}` +

@@ -19,6 +19,7 @@ import { updateWaiting, useAppUpdate } from "../stores/appUpdate";
 import { needsAttention, useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
+import { ProfileAvatar, useProfileName } from "./ProfileAvatar";
 import { Logo, LogoMark } from "./Brand";
 import { NamePlaylistDialog } from "./Dialogs";
 import { byRecentPlay, usePlaylistPlays } from "../stores/playlistPlays";
@@ -98,6 +99,7 @@ function RailLink({ to, label, sub, end, children }: { to: string; label: string
 
 export function Rail() {
   const t = useT();
+  const profileName = useProfileName();
   const sidebarPlaylists = useAppearance((s) => s.sidebarPlaylists);
   const playedAt = usePlaylistPlays((s) => s.playedAt);
   const playlists = byRecentPlay(useLibrary((s) => s.playlists), playedAt);
@@ -178,7 +180,10 @@ export function Rail() {
           ))}
         </div>
 
-        <div className="flex border-t border-line p-2">
+        <div className="border-t border-line p-2">
+          <RailLink to={paths.profile} label={profileName} sub={t.profile.title}>
+            <ProfileAvatar name={profileName} className="size-9" />
+          </RailLink>
           <SettingsButton />
         </div>
       </div>

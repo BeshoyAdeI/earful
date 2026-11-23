@@ -1,5 +1,10 @@
 import type { AlbumCard, AlbumPage, ArtistPage, ArtistSongs, Genre, GenreArtist, GenrePage, Library, Lyrics, Playlist, Track } from "./types";
 
+import type { PlayEvent } from "../../../server/src/plays.js";
+import type { Stats, StatsRange } from "../../../server/src/stats.js";
+
+export type { PlayEvent, Stats, StatsRange };
+
 /**
  * What the app needs from a backend. The web app and the desktop app talk to the Earful server over HTTP
  * (lib/api.ts); the Android app does the same work on the phone (native/api.ts). The build picks one.
@@ -129,6 +134,15 @@ export interface EarfulApi {
   nowPlaying(playing: NowPlaying | null): Promise<void>;
   discordStatus(): Promise<DiscordStatus>;
   setDiscord(enabled: boolean): Promise<DiscordStatus>;
+
+  recordPlay(event: PlayEvent): Promise<void>;
+  recordPlayBeacon?(event: PlayEvent): boolean;
+  stats(range: StatsRange, signal?: AbortSignal): Promise<Stats>;
+  clearPlays(): Promise<void>;
+  imageSrc(url: string): string | Promise<string>;
+  saveImage(name: string, blob: Blob): Promise<void>;
+  canShareImage(name: string, blob: Blob): Promise<boolean>;
+  shareImage(name: string, blob: Blob, text: string): Promise<void>;
 
   library(): Promise<Library>;
   addFavorite(t: Track): Promise<{ favorites: Track[] }>;

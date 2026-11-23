@@ -43,9 +43,10 @@ interface RowProps {
   onPlay: () => void;
   playlistId?: string;
   showAlbum: boolean;
+  detail?: string;
 }
 
-const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, showAlbum }: RowProps) {
+const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, showAlbum, detail }: RowProps) {
   const isCurrent = usePlayer((s) => selectCurrent(s)?.id === track.id);
   const isPlaying = usePlayer((s) => s.status === "playing" || s.status === "loading");
   const isFavorite = useLibrary((s) => s.favorites.some((t) => t.id === track.id));
@@ -101,6 +102,7 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
           <DownloadStatus track={track} />
           {track.offline && <span className="shrink-0 rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px]">{t.offline[track.offline]}</span>}
         </p>
+        {detail && <p className="mt-0.5 truncate font-mono text-xs text-accent-text tabular-nums">{detail}</p>}
       </div>
 
       {showAlbum && <p className="pointer-events-none hidden truncate text-sm text-fg-2 lg:block">{track.album ?? ""}</p>}
@@ -143,9 +145,10 @@ interface ListProps {
   playlistId?: string;
   showAlbum?: boolean;
   header?: boolean;
+  rowDetail?: (track: Track) => string;
 }
 
-export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted = true, header = true }: ListProps) {
+export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted = true, header = true, rowDetail }: ListProps) {
   const playList = usePlayer((s) => s.playList);
   const t = useT();
   // Pages ask for the album column where it makes sense; Settings can turn it off everywhere.
@@ -179,6 +182,7 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
             position={i}
             playlistId={playlistId}
             showAlbum={showAlbum}
+            detail={rowDetail?.(t)}
             onPlay={() => {
               if (playlistId) usePlaylistPlays.getState().markPlayed(playlistId);
               playList(context ?? tracks, i);

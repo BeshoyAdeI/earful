@@ -15,7 +15,7 @@ import { useDownloads } from "../stores/downloads";
 import { useUi } from "../stores/ui";
 import { byRecentPlay, usePlaylistPlays } from "../stores/playlistPlays";
 
-function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind: CoverKind; tracks: Track[]; sub: string }) {
+function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind: CoverKind; tracks: Track[]; sub?: string }) {
   return (
     <li>
       <Link
@@ -30,7 +30,7 @@ function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind
         />
         <span className="min-w-0">
           <span className="block truncate font-medium">{name}</span>
-          <span className="block truncate text-sm text-fg-2">{sub}</span>
+          {sub && <span className="block truncate text-sm text-fg-2">{sub}</span>}
         </span>
       </Link>
     </li>
@@ -87,6 +87,7 @@ export default function Library() {
         <Entry to={paths.favorites} name={t.nav.favorites} kind="favorites" tracks={favorites} sub={t.common.tracks(favorites.length)} />
         <Entry to={paths.history} name={t.nav.recentlyPlayed} kind="history" tracks={history} sub={t.common.tracks(history.length)} />
         <Entry to={paths.offline} name={t.offline.title} kind="offline" tracks={offline} sub={t.common.tracks(offline.length)} />
+        <Entry to={paths.profile} name={t.profile.stats} kind="stats" tracks={[]} />
         {playlists.map((p) => (
           <Entry
             key={p.id}

@@ -7,6 +7,10 @@ export type Lang = "en" | "pt-BR";
 type Params = Record<string, string | number>;
 
 const en = {
+  invalidPlay: "Invalid listening event.",
+  invalidCover: "Invalid cover URL.",
+  coverUnavailable: "Could not load cover art.",
+  invalidStatsRange: "Invalid listening stats range.",
   discordPaused: "Paused",
   discordYoutube: "Listen on YouTube",
   discordSetting: "Send an enabled setting of true or false.",
@@ -66,6 +70,10 @@ const en = {
 export type MsgKey = keyof typeof en;
 
 const pt: Record<MsgKey, string> = {
+  invalidPlay: "Registro de escuta inválido.",
+  invalidCover: "Endereço da capa inválido.",
+  coverUnavailable: "Não foi possível carregar a capa.",
+  invalidStatsRange: "Período de estatísticas inválido.",
   discordPaused: "Em pausa",
   discordYoutube: "Ouvir no YouTube",
   discordSetting: "Informe se o Discord deve estar ativado ou desativado.",

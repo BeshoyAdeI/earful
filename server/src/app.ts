@@ -10,6 +10,10 @@ import { lyricsFor } from "./lyrics.js";
 import { createDiscordPresence } from "./discord.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
+import { coverUrl, isCoverType, MAX_COVER_BYTES } from "./image.js";
+import { allPlays, clearPlays, recordPlay, usePlaysStorage } from "./plays.js";
+import { playsFileStorage } from "./playsFile.js";
+import { computeStats } from "./stats.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { getSettings, isCacheDays, updateSettings } from "./settings.js";
 import { proxyStream, serveFile } from "./stream.js";
@@ -47,6 +51,7 @@ export interface RunningServer {
 /** Builds the Earful HTTP server (API + web app) and starts listening. */
 export async function startServer(opts: StartOptions = {}): Promise<RunningServer> {
   library.useLibraryStorage(fileStorage());
+  usePlaysStorage(playsFileStorage());
   const found = await refreshTools();
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "warn" } });
   // The music server can still start if settings.json is temporarily unreadable.
@@ -272,6 +277,72 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
       ...downloads.map(({ track }) => ({ ...track, offline: "downloaded" })),
       ...listCached().filter(({ track }) => !ids.has(track.id)).map(({ track }) => ({ ...track, offline: "cached" })),
     ] };
+  });
+
+  app.post("/api/plays", { bodyLimit: 16_384 }, async (req, reply) => {
+    let event = req.body;
+    if (typeof event === "string") {
+      try {
+        event = JSON.parse(event);
+      } catch {
+        throw new HttpError(400, msg("invalidPlay"));
+      }
+    }
+    await recordPlay(event);
+    return reply.code(204).send();
+  });
+
+  app.delete("/api/plays", async (_req, reply) => {
+    await clearPlays();
+    return reply.code(204).send();
+  });
+
+  app.get("/api/stats", async (req, reply) => {
+    const { from, to, tz } = req.query as Record<string, unknown>;
+    const parse = (value: unknown, limit: number) => {
+      if (value === undefined) return null;
+      if (typeof value === "string" && /^-?\d+$/.test(value) && Math.abs(Number(value)) <= limit) return Number(value);
+      throw new HttpError(400, msg("invalidStatsRange"));
+    };
+    const range = { from: parse(from, 8.64e15), to: parse(to, 8.64e15), tzOffsetMin: parse(tz, 14 * 60) ?? 0 };
+    if (range.from !== null && range.to !== null && range.from > range.to) throw new HttpError(400, msg("invalidStatsRange"));
+    reply.header("cache-control", "no-store");
+    return computeStats(await allPlays(), range);
+  });
+
+  app.get("/api/image", async (req, reply) => {
+    const url = coverUrl((req.query as { u?: unknown }).u);
+    if (!url) throw new HttpError(400, msg("invalidCover"));
+    const unavailable = () => new HttpError(502, msg("coverUnavailable"));
+    // Do not follow redirects, which could take an allowed URL outside the cover hosts.
+    const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(8_000) }).catch(() => {
+      throw unavailable();
+    });
+    const type = response.headers.get("content-type") ?? "";
+    if (!response.ok || !response.body || !isCoverType(type) ||
+      Number(response.headers.get("content-length")) > MAX_COVER_BYTES) {
+      await response.body?.cancel().catch(() => {});
+      throw unavailable();
+    }
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > MAX_COVER_BYTES) throw unavailable();
+        chunks.push(value);
+      }
+    } catch {
+      await reader.cancel().catch(() => {});
+      throw unavailable();
+    } finally {
+      reader.releaseLock();
+    }
+    return reply.type(type).header("x-content-type-options", "nosniff")
+      .header("cache-control", "public, max-age=86400").send(Buffer.concat(chunks, size));
   });
 
   // Library

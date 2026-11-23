@@ -1,6 +1,8 @@
 import { ArrowLeftIcon, GearSixIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
+import { paths } from "../lib/routes";
+import { ProfileAvatar, useProfileName } from "./ProfileAvatar";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import { updateWaiting, useAppUpdate } from "../stores/appUpdate";
@@ -26,6 +28,7 @@ export function PageHeader({
   const tools = useSystem((s) => needsAttention(s.info));
   const appUpdate = useAppUpdate(updateWaiting);
   const attention = tools || appUpdate;
+  const profileName = useProfileName();
   const t = useT();
   return (
     <header
@@ -36,11 +39,14 @@ export function PageHeader({
         className,
       )}
     >
-      <div className="flex h-14 items-center gap-3 px-4 md:h-16 md:px-6">
+      <div className="flex h-14 items-center gap-1.5 px-4 sm:gap-3 md:h-16 md:px-6">
         <LogoMark className="size-7 shrink-0 text-accent-text md:hidden" />
         {title && <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight md:text-xl">{title}</h1>}
         {!title && <span className="flex-1" />}
         {actions}
+        <Link to={paths.profile} aria-label={t.profile.title} className="grid size-9 shrink-0 place-items-center rounded-full md:hidden">
+          <ProfileAvatar name={profileName} className="size-7 text-sm" />
+        </Link>
         <IconButton
           label={attention ? t.nav.settingsUpdate : t.nav.settings}
           onClick={() => setSettingsOpen(true)}

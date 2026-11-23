@@ -86,6 +86,23 @@ export const api: EarfulApi = {
   discordStatus: () => request<DiscordStatus>("/api/discord"),
   setDiscord: (enabled) => request<DiscordStatus>("/api/discord", { method: "PUT", json: { enabled } }),
 
+  recordPlay: (event) => request("/api/plays", { method: "POST", json: event, keepalive: true }),
+  recordPlayBeacon: (event) => navigator.sendBeacon?.("/api/plays", new Blob([JSON.stringify(event)], { type: "text/plain" })) ?? false,
+  stats: ({ from, to, tzOffsetMin }, signal) => {
+    const params = new URLSearchParams({ tz: String(tzOffsetMin) });
+    if (from !== null) params.set("from", String(from));
+    if (to !== null) params.set("to", String(to));
+    return request(`/api/stats?${params}`, { signal });
+  },
+  clearPlays: () => request("/api/plays", { method: "DELETE" }),
+  imageSrc: (url) => `/api/image?${new URLSearchParams({ u: url })}`,
+  saveImage: downloadBlob,
+  canShareImage: async (name, blob) => typeof navigator.share === "function" &&
+    !!navigator.canShare?.({ files: [imageFile(name, blob)] }),
+  shareImage: async (name, blob, text) => {
+    await navigator.share({ files: [imageFile(name, blob)], text });
+  },
+
   library: () => request<Library>("/api/library"),
   addFavorite: (t: Track) => request<{ favorites: Track[] }>(`/api/favorites/${t.id}`, { method: "PUT", json: t }),
   addFavorites: (tracks: Track[]) => request<{ favorites: Track[] }>("/api/favorites", { method: "POST", json: { tracks } }),
@@ -113,7 +130,15 @@ export const streamSource = (id: string, kind: "audio" | "video", quality: "sd" 
 
 /** Saves a text file the way this platform does it: a browser download (the desktop app shows "Save as"). */
 export async function saveFile(name: string, text: string, mime = "application/json") {
-  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  await downloadBlob(name, new Blob([text], { type: mime }));
+}
+
+function imageFile(name: string, blob: Blob): File {
+  return new File([blob], name, { type: "image/png" });
+}
+
+async function downloadBlob(name: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
   document.body.appendChild(a);
   a.click();

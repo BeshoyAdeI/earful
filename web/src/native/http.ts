@@ -73,4 +73,23 @@ export function makeFetch(transport: Transport): typeof fetch {
   };
 }
 
-export const nativeFetch = makeFetch(capacitorTransport);
+const nativeTextFetch = makeFetch(capacitorTransport);
+
+export const nativeFetch: typeof fetch = async (input, init) => {
+  if (new Headers(init?.headers).get("accept") !== "image/*") return nativeTextFetch(input, init);
+  const url = input instanceof Request ? input.url : String(input);
+  const res = await CapacitorHttp.get({
+    url,
+    headers: { accept: "image/*" },
+    responseType: "arraybuffer",
+    disableRedirects: true,
+    connectTimeout: 8_000,
+    readTimeout: 8_000,
+  });
+  // Capacitor returns native binary bodies as base64 strings on both platforms.
+  const headers = new Headers(res.headers);
+  if (res.status !== 200) return new Response(null, { status: res.status, headers });
+  const data = atob(res.data);
+  const bytes = Uint8Array.from(data, (ch) => ch.charCodeAt(0));
+  return new Response(bytes, { status: res.status, headers });
+};

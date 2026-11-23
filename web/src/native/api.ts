@@ -16,6 +16,11 @@ import {
 } from "../../../server/src/browse";
 import { msg, tr, type MsgKey } from "../../../server/src/i18n";
 import { lyricsFor } from "../../../server/src/lyrics";
+import { coverUrl, isCoverType, MAX_COVER_BYTES } from "../../../server/src/image";
+import { allPlays, clearPlays, recordPlay, usePlaysStorage } from "../../../server/src/plays";
+import { computeStats } from "../../../server/src/stats";
+import { nativePlaysStorage } from "./playsStorage";
+import { config } from "./shims/config";
 import * as library from "../../../server/src/library";
 import { findVideoFor, radio, search, suggestions } from "../../../server/src/search";
 import { HttpError, VIDEO_ID } from "../../../server/src/types";
@@ -34,6 +39,7 @@ export * from "../lib/apiTypes";
 export { onExternalFile } from "./playlistFiles";
 
 library.useLibraryStorage(nativeStorage);
+usePlaysStorage(nativePlaysStorage);
 
 const fail = (status: number, key: MsgKey) => new ApiError(status, tr(getLang(), msg(key)));
 
@@ -123,6 +129,22 @@ export const api: EarfulApi = {
   discordStatus: discordUnavailable,
   setDiscord: discordUnavailable,
 
+  recordPlay: (event) => call(() => recordPlay(event)),
+  stats: (range, signal) => call(async () => computeStats(await allPlays(), range), signal),
+  clearPlays: () => call(clearPlays),
+  imageSrc: async (src) => {
+    const url = coverUrl(src);
+    if (!url) throw fail(400, "invalidCover");
+    const response = await (config.fetch ?? fetch)(url, { headers: { accept: "image/*" }, redirect: "error" });
+    if (!response.ok || !isCoverType(response.headers.get("content-type") ?? "")) throw fail(502, "coverUnavailable");
+    const blob = await response.blob();
+    if (blob.size > MAX_COVER_BYTES) throw fail(502, "coverUnavailable");
+    return URL.createObjectURL(blob);
+  },
+  saveImage: (name, blob) => shareImage(name, blob),
+  canShareImage: async () => (await Share.canShare()).value,
+  shareImage,
+
   library: () => call(() => library.getLibrary()),
   addFavorite: (t) => call(async () => ({ favorites: await library.addFavorite(library.sanitizeTrack(t)) })),
   addFavorites: (list) => call(async () => ({ favorites: await library.addFavorites(tracks(list)) })),
@@ -170,6 +192,17 @@ export async function saveFile(name: string, text: string, mime?: string) {
     return Device.sharePlaylist({ uri, title: name });
   }
   await Share.share({ title: name, files: [uri] });
+}
+
+async function shareImage(name: string, blob: Blob, text?: string) {
+  const data = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+  const { uri } = await Filesystem.writeFile({ path: name, data, directory: Directory.Cache });
+  await Share.share({ title: name, text, files: [uri] });
 }
 
 export const systemMedia = media;
