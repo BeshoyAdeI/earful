@@ -6,6 +6,8 @@ export interface Track {
   artist: string;
   artists?: { name: string; id?: string }[];
   album?: string;
+  /** Release year, when known (artist pages). */
+  year?: string;
   duration: number;
   thumb: string;
   art: string;
@@ -68,6 +70,8 @@ export interface ArtistPage {
   description: string;
   banner: string;
   tracks: Track[];
+  /** More songs past `tracks`, from `api.artistSongs`. */
+  moreTracks: boolean;
   albums: AlbumCard[];
   singles: AlbumCard[];
 }
@@ -83,4 +87,11 @@ export interface AlbumPage {
   thumb: string;
   art: string;
   tracks: Track[];
+}
+
+/** A page of an artist's songs (see server/src/browse.ts). */
+export interface ArtistSongs {
+  tracks: Track[];
+  next: number | null;
+  total: number;
 }

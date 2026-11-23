@@ -334,7 +334,9 @@ export const pt: Messages = {
   artist: {
     fallbackName: "Artista",
     label: "Artista",
-    hits: "Maiores sucessos",
+    hits: "Músicas",
+    songCount: (n) => `${n} músicas`,
+    loadingMore: "Carregando mais músicas…",
     openFailed: "Não deu para abrir este artista",
     noHits: "Nenhuma música encontrada",
     noHitsBody: "O YouTube Music não lista sucessos para este artista.",

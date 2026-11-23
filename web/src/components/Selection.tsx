@@ -219,7 +219,16 @@ export function SelectableRow({
 }
 
 /** A plain list of tracks to pick from, with its own selection bar. Remount (via `key`) to reset the selection. */
-export function SelectableTrackList({ tracks, numbered }: { tracks: Track[]; numbered?: boolean }) {
+/** `noteFor`: an extra bit after the artist on each row (the artist page shows album · year). */
+export function SelectableTrackList({
+  tracks,
+  numbered,
+  noteFor,
+}: {
+  tracks: Track[];
+  numbered?: boolean;
+  noteFor?: (track: Track) => ReactNode;
+}) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const playList = usePlayer((s) => s.playList);
   const chosen = tracks.filter((t) => selected.has(t.id));
@@ -251,6 +260,7 @@ export function SelectableTrackList({ tracks, numbered }: { tracks: Track[]; num
               selected={selected.has(t.id)}
               onToggle={() => toggle(t.id)}
               onPlay={() => playList(tracks, i)}
+              note={noteFor?.(t)}
             />
           </li>
         ))}

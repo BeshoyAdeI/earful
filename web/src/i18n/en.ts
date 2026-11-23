@@ -340,7 +340,9 @@ export const en = {
   artist: {
     fallbackName: "Artist",
     label: "Artist",
-    hits: "Greatest hits",
+    hits: "Songs",
+    songCount: (n: number) => `${n} songs`,
+    loadingMore: "Loading more songs…",
     openFailed: "Couldn't open this artist",
     noHits: "No songs found",
     noHitsBody: "YouTube Music doesn't list hits for this artist.",

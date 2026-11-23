@@ -6,6 +6,8 @@ export interface Track {
   artist: string;
   artists?: { name: string; id?: string }[];
   album?: string;
+  /** Release year, when known (artist pages). */
+  year?: string;
   duration: number;
   thumb: string;
   art: string;

@@ -3,7 +3,7 @@ import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { cacheAudio, cacheStats, cachedAudio, clearAudioCache, flushAudioCache, listCached, pruneAudioCache } from "./audioCache.js";
-import { ALBUM_ID, album, ARTIST_ID, artist, artistId, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
+import { ALBUM_ID, album, ARTIST_ID, artist, artistId, artistSongs, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
 import { config } from "./config.js";
 import { downloadedAudio, downloadStatus, enqueueDownloads, isDownloading, listDownloaded, removeDownload } from "./downloads.js";
 import { lyricsFor } from "./lyrics.js";
@@ -136,6 +136,13 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     const { aid } = req.params as { aid: string };
     if (!ARTIST_ID.test(aid)) throw new HttpError(400, msg("invalidArtist"));
     return artist(aid, langOf(req));
+  });
+
+  app.get("/api/artists/:aid/songs", async (req) => {
+    const { aid } = req.params as { aid: string };
+    if (!ARTIST_ID.test(aid)) throw new HttpError(400, msg("invalidArtist"));
+    const offset = Number((req.query as { offset?: string }).offset ?? 0);
+    return artistSongs(aid, Number.isFinite(offset) ? offset : 0, langOf(req));
   });
 
   app.get("/api/albums/:alid", async (req) => {

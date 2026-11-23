@@ -45,7 +45,10 @@ export interface ArtistPage {
   name: string;
   description: string;
   banner: string;
+  /** The first page of the artist's songs; the rest come from `artistSongs`. */
   tracks: Track[];
+  /** More songs past `tracks` (the artist's full song list is longer). */
+  moreTracks: boolean;
   albums: AlbumCard[];
   singles: AlbumCard[];
 }
@@ -75,6 +78,11 @@ const MAX_ARTISTS = 600;
 const PLAYLISTS_PER_ROUND = 4;
 const MAX_GENRE_TRACKS = 150;
 const MAX_HITS = 50;
+/** Songs per page on the artist page, and how far the full list is read. */
+const SONGS_PAGE = 50;
+const MAX_SONGS = 1000;
+/** Releases read to find each song's year (album pages are cached). */
+const MAX_RELEASES = 80;
 
 /** Time-boxed memo: these pages change slowly, and going back and forth between them should be instant. */
 function cached<T>(ttl: number, load: (key: string) => Promise<T>): (key: string) => Promise<T> {
@@ -152,6 +160,25 @@ const genreList = cached(6 * 60 * MINUTE, async (key): Promise<Genre[]> => {
 });
 
 export const genres = (lang: Lang) => genreList(keyOf(lang));
+
+/** A playlist's items past its first page too, following continuations up to `limit`. */
+async function allPlaylistItems(id: string, limit: number, lang: Lang): Promise<any[]> {
+  try {
+    return await withClient(async (yt) => {
+      let list: any = await yt.music.getPlaylist(id);
+      const items: any[] = [...(list.items ?? list.contents ?? [])];
+      while (items.length < limit && list.has_continuation) {
+        list = await list.getContinuation();
+        const page: any[] = list.items ?? list.contents ?? [];
+        if (!page.length) break;
+        items.push(...page);
+      }
+      return items.slice(0, limit);
+    }, lang);
+  } catch {
+    return [];
+  }
+}
 
 async function playlistItems(id: string, limit: number, lang: Lang): Promise<any[]> {
   try {
@@ -331,9 +358,11 @@ const artistPage = cached(30 * MINUTE, async (key): Promise<ArtistPage> => {
   let items: any[] = itemsOf(shelf);
   // The shelf shows 5; its "show all" link is a playlist with the full ranking.
   const fullList = shelf?.endpoint?.payload?.browseId;
-  const [more, albums] = await Promise.all([
+  if (typeof fullList === "string" && fullList.startsWith("VL")) songLists.set(key, fullList);
+  const [more, albums, singles] = await Promise.all([
     typeof fullList === "string" && fullList.startsWith("VL") ? playlistItems(fullList, MAX_HITS * 2, lang) : Promise.resolve([]),
     releaseShelves[0] ? allAlbums(releaseShelves[0], lang) : Promise.resolve([]),
+    releaseShelves[1] ? allAlbums(releaseShelves[1], lang) : Promise.resolve([]),
   ]);
   if (more.length) items = more;
   const banner = (header?.thumbnail?.contents ?? header?.thumbnail ?? [])[0]?.url;
@@ -346,12 +375,84 @@ const artistPage = cached(30 * MINUTE, async (key): Promise<ArtistPage> => {
     description: text(header?.description),
     banner: typeof banner === "string" && banner.startsWith("https://") ? banner : "",
     tracks,
+    moreTracks: more.length > MAX_HITS || (typeof fullList === "string" && more.length >= MAX_HITS),
     albums,
-    singles: releaseShelves[1] ? albumCards(itemsOf(releaseShelves[1])) : [],
+    singles,
   };
 });
 
 export const artist = (id: string, lang: Lang) => artistPage(keyOf(lang, id));
+
+/** Each artist's "all songs" playlist, found while reading the artist page. */
+const songLists = new Map<string, string>();
+
+/** The artist's whole song list, read once (all its pages) and kept a while. */
+const artistSongList = cached(30 * MINUTE, async (key): Promise<Track[]> => {
+  const { lang } = parseKey(key);
+  const page = await artistPage(key);
+  const list = songLists.get(key);
+  if (!list) return page.tracks;
+  const items = await allPlaylistItems(list, MAX_SONGS, lang);
+  const tracks = uniqueTracks(items.map((i) => toTrack(i, "song")));
+  return tracks.length ? tracks : page.tracks;
+});
+
+/**
+ * The year (and album) of each of the artist's songs: the song list doesn't say, but the artist's albums and
+ * singles do, so their track lists are read once and matched by video id. A song on several releases gets the
+ * earliest one.
+ */
+/** Song titles compared loosely: case, accents, "(feat. …)", "- Remix" style suffixes and punctuation don't matter. */
+const songKey = (title: string) =>
+  "t:" + title
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\(.*?\)|\[.*?\]| - .*$/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+
+const artistReleases = cached(60 * MINUTE, async (key): Promise<Map<string, { album: string; year: string }>> => {
+  const { lang } = parseKey(key);
+  const page = await artistPage(key);
+  const releases = [...page.albums, ...page.singles].slice(0, MAX_RELEASES);
+  const found = new Map<string, { album: string; year: string }>();
+  let next = 0;
+  const worker = async () => {
+    while (next < releases.length) {
+      const card = releases[next++]!;
+      const release = await albumPage(keyOf(lang, card.id)).catch(() => null);
+      for (const t of release?.tracks ?? []) {
+        // By video id, and by title: the artist's song list often links another upload of the same song.
+        for (const k of [t.id, songKey(t.title)]) {
+          const known = found.get(k);
+          if (!known || (card.year && (!known.year || card.year < known.year))) found.set(k, { album: card.title, year: card.year });
+        }
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 4 }, worker));
+  return found;
+});
+
+export interface ArtistSongs {
+  tracks: Track[];
+  /** Index of the first song after these, or null at the end of the list. */
+  next: number | null;
+  total: number;
+}
+
+/** A page of the artist's songs, each with its album and year when the artist's releases tell. */
+export async function artistSongs(id: string, offset: number, lang: Lang): Promise<ArtistSongs> {
+  const key = keyOf(lang, id);
+  const [all, releases] = await Promise.all([artistSongList(key), artistReleases(key).catch(() => new Map())]);
+  const start = Math.max(0, Math.floor(offset) || 0);
+  const tracks = all.slice(start, start + SONGS_PAGE).map((t) => {
+    const release = releases.get(t.id) ?? releases.get(songKey(t.title));
+    return release ? { ...t, album: t.album || release.album, year: release.year || undefined } : t;
+  });
+  const end = start + tracks.length;
+  return { tracks, next: end < all.length ? end : null, total: all.length };
+}
 
 const normalizedArtistName = (name: string) => name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 

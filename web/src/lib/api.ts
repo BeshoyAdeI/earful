@@ -12,7 +12,7 @@ import {
   type SystemJob,
   type SystemMedia,
 } from "./apiTypes";
-import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Lyrics, Playlist, Track } from "./types";
+import type { AlbumCard, AlbumPage, ArtistPage, ArtistSongs, Genre, GenreArtist, GenrePage, Library, Lyrics, Playlist, Track } from "./types";
 
 // The HTTP backend: the Earful server (web app, desktop app). The Android build swaps this module for native/api.ts.
 export * from "./apiTypes";
@@ -57,6 +57,8 @@ export const api: EarfulApi = {
     });
   },
   artist: (id: string, signal?: AbortSignal) => request<ArtistPage>(`/api/artists/${encodeURIComponent(id)}`, { signal }),
+  artistSongs: (id: string, offset: number, signal?: AbortSignal) =>
+    request<ArtistSongs>(`/api/artists/${encodeURIComponent(id)}/songs?offset=${offset}`, { signal }),
   album: (id: string, signal?: AbortSignal) => request<AlbumPage>(`/api/albums/${encodeURIComponent(id)}`, { signal }),
   searchAlbums: (q: string, signal?: AbortSignal) =>
     request<{ albums: AlbumCard[] }>(`/api/search/albums?q=${encodeURIComponent(q)}`, { signal }).then((r) => r.albums),

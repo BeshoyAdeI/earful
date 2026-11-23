@@ -5,6 +5,7 @@ import {
   album as albumPage,
   ALBUM_ID,
   artist as artistPage,
+  artistSongs,
   ARTIST_ID,
   artistId,
   GENRE_ID,
@@ -83,6 +84,11 @@ export const api: EarfulApi = {
     call(async () => {
       if (!ARTIST_ID.test(id)) throw fail(400, "invalidArtist");
       return artistPage(id, getLang());
+    }, signal),
+  artistSongs: (id, offset, signal) =>
+    call(async () => {
+      if (!ARTIST_ID.test(id)) throw fail(400, "invalidArtist");
+      return artistSongs(id, offset, getLang());
     }, signal),
   album: (id, signal) =>
     call(async () => {
