@@ -42,7 +42,6 @@
         "ext": "earful",
         "name": "Earful Playlist",
         "description": "Earful playlist",
-        "icon": "icon",
         "role": "Viewer",
         "mimeType": "application/x-earful-playlist"
       }
