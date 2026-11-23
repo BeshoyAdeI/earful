@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
+import { updateWaiting, useAppUpdate } from "../stores/appUpdate";
 import { needsAttention, useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { LogoMark } from "./Brand";
@@ -22,7 +23,9 @@ export function PageHeader({
   className?: string;
 }) {
   const setSettingsOpen = useUi((s) => s.setSettingsOpen);
-  const attention = useSystem((s) => needsAttention(s.info));
+  const tools = useSystem((s) => needsAttention(s.info));
+  const appUpdate = useAppUpdate(updateWaiting);
+  const attention = tools || appUpdate;
   const t = useT();
   return (
     <header

@@ -7,6 +7,18 @@ contextBridge.exposeInMainWorld("earfulDesktop", {
   setLanguage: (lang: string) => ipcRenderer.send("earful:lang", lang),
   retry: () => ipcRenderer.send("earful:retry"),
   openPath: (path: string): Promise<boolean> => ipcRenderer.invoke("earful:open-path", path),
+  update: {
+    get: () => ipcRenderer.invoke("earful:update-get"),
+    check: () => ipcRenderer.invoke("earful:update-check"),
+    download: () => ipcRenderer.invoke("earful:update-download"),
+    install: () => ipcRenderer.invoke("earful:update-install"),
+    openRelease: () => ipcRenderer.invoke("earful:update-open-release"),
+    onState: (handler: (state: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, state: unknown) => handler(state);
+      ipcRenderer.on("earful:update-state", listener);
+      return () => ipcRenderer.removeListener("earful:update-state", listener);
+    },
+  },
   onOpenPlaylist: (handler: (file: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, file: unknown) => handler(file);
     ipcRenderer.on("earful:open-playlist", listener);

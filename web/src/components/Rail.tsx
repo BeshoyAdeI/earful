@@ -15,6 +15,7 @@ import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
 import { useAppearance } from "../stores/appearance";
 import { useLibrary } from "../stores/library";
+import { updateWaiting, useAppUpdate } from "../stores/appUpdate";
 import { needsAttention, useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
@@ -27,13 +28,14 @@ const nav = [
   { to: paths.library, key: "library", Icon: BooksIcon, end: false },
 ] as const;
 
-/** Settings entry. Shows a dot (and on the wide rail, an "Update" pill) when yt-dlp needs attention. */
+/** Settings entry. Shows a dot (and on the wide rail, an "Update" pill) when yt-dlp or Earful itself has an update. */
 function SettingsButton() {
   const t = useT();
   const info = useSystem((s) => s.info);
   const setOpen = useUi((s) => s.setSettingsOpen);
-  const attention = needsAttention(info);
-  const updatable = !!info?.ytdlp.updateAvailable || !info?.ytdlp.path;
+  const appUpdate = useAppUpdate(updateWaiting);
+  const attention = needsAttention(info) || appUpdate;
+  const updatable = appUpdate || !!info?.ytdlp.updateAvailable || !info?.ytdlp.path;
   return (
     <button
       type="button"

@@ -6,6 +6,7 @@ import { app, BrowserWindow, ipcMain, Menu, screen, shell } from "electron";
 import type { RunningServer } from "../../server/src/app.js";
 import { isPlaylistFileName, MAX_PLAYLIST_FILE_BYTES } from "../../web/src/lib/playlistFile.js";
 import { backupLibraryOnUpdate } from "./backup.js";
+import { setupUpdater } from "./updater.mjs";
 
 // No top-level await in this file: Electron only fires "ready" after the entry module finishes
 // evaluating, so awaiting it at the top level would hang forever.
@@ -319,5 +320,6 @@ void app.whenReady().then(() => {
   Menu.setApplicationMenu(
     isMac ? Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]) : null,
   );
+  setupUpdater();
   return launch();
 });
