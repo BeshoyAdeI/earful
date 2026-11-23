@@ -2,7 +2,7 @@ import { ArrowClockwiseIcon, ArrowSquareOutIcon, CaretDownIcon, DownloadSimpleIc
 import { useState } from "react";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
-import { useAppUpdate } from "../stores/appUpdate";
+import { updatesInApp, useAppUpdate } from "../stores/appUpdate";
 
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 
@@ -30,12 +30,12 @@ export function UpdateSection() {
               {state.status === "checking" && t.update.checking}
               {state.status === "latest" && t.update.latest}
               {state.status === "idle" && t.update.idle}
-              {state.status === "available" && (state.canInstall ? t.update.ready(state.current) : t.update.manual(state.current))}
+              {state.status === "available" && (state.canInstall ? (updatesInApp ? t.update.readyFull(state.current) : t.update.ready(state.current)) : t.update.manual(state.current))}
               {state.status === "downloading" &&
                 (state.total
                   ? t.update.downloading(mb(state.transferred), mb(state.total))
                   : t.update.starting)}
-              {state.status === "downloaded" && t.update.downloaded}
+              {state.status === "downloaded" && (updatesInApp ? t.update.installReady : t.update.downloaded)}
               {state.status === "error" && t.update.failed(state.message)}
             </p>
             {state.status === "downloading" && state.fullSize && (
@@ -96,7 +96,7 @@ export function UpdateSection() {
           )}
           {state.status === "downloaded" && (
             <button type="button" onClick={() => void install()} className={cn(action, "bg-accent text-accent-ink")}>
-              <RocketLaunchIcon size={16} /> {t.update.restart}
+              <RocketLaunchIcon size={16} /> {updatesInApp ? t.update.install : t.update.restart}
             </button>
           )}
         </div>

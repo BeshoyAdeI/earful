@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(EarfulPlaybackPlugin.class);
         registerPlugin(EarfulDevicePlugin.class);
+        registerPlugin(EarfulUpdaterPlugin.class);
         // Before Capacitor reads the launch intent: a shared file becomes an "open" it understands.
         setIntent(asOpen(getIntent()));
         super.onCreate(savedInstanceState);

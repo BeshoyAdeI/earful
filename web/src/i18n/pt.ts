@@ -245,6 +245,7 @@ export const pt: Messages = {
     radioContinuing: (title) => `Continuando com o rádio de "${title}"`,
     playsNext: (title) => `"${title}" toca a seguir`,
     addedToQueue: (title) => `"${title}" adicionada à fila`,
+    addedManyToQueue: (n) => `${count(n, "música adicionada", "músicas adicionadas")} à fila`,
     startingRadio: (title) => `Montando rádio de "${title}"`,
     cantPlay: (title, reason) => `Não foi possível tocar "${title}". ${reason}`,
     aTrack: "esta faixa",
@@ -590,6 +591,9 @@ export const pt: Messages = {
     restart: "Reiniciar e atualizar",
     available: (v) => `Earful ${v} disponível`,
     view: "Ver",
+    readyFull: (current) => `Você tem a ${current}. Baixe aqui e instale; o Earful fecha e se atualiza sozinho.`,
+    installReady: "Baixado. Toque em Instalar: o Earful fecha enquanto o Android o atualiza, depois abra de novo. Sua biblioteca e configurações continuam iguais.",
+    install: "Instalar e reiniciar",
   },
 
   toasts: {

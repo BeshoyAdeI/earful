@@ -1,4 +1,4 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { create } from "zustand";
 import { getT } from "../i18n";
 import { desktop, type UpdateState } from "../lib/desktop";
@@ -7,13 +7,22 @@ import { toast } from "./ui";
 
 /**
  * New versions of the app. The desktop app updates itself (desktop/src/updater.mts: downloads only the changed
- * blocks, then restarts into the new version). The phone apps can't replace themselves, so they check GitHub's
- * latest release and offer its download. The web app updates through its service worker and needs nothing here.
+ * blocks, then restarts into the new version). The Android app does the same through EarfulUpdaterPlugin: it
+ * downloads the APK from GitHub's latest release and hands it to Android, which closes and replaces Earful. iOS
+ * can't replace itself, so it offers the release's download. The web app updates through its service worker.
  */
 
 const RELEASES = "https://github.com/BeshoyAdeI/earful/releases";
 const LATEST = "https://api.github.com/repos/BeshoyAdeI/earful/releases/latest";
 const PHONE_CHECK_EVERY_MS = 12 * 3600_000;
+
+/** mobile/android/.../EarfulUpdaterPlugin.java */
+const AndroidUpdater = registerPlugin<{
+  download(options: { url: string }): Promise<{ size: number }>;
+  install(): Promise<void>;
+  addListener(event: "progress", handler: (p: { transferred: number; total: number }) => void): Promise<{ remove: () => Promise<void> }>;
+  addListener(event: "installFailed", handler: (e: { message: string }) => void): Promise<{ remove: () => Promise<void> }>;
+}>("EarfulUpdater");
 
 interface AppUpdateState {
   state: UpdateState;
@@ -32,6 +41,8 @@ export function newer(a: string, b: string): boolean {
 }
 
 const phone = Capacitor.isNativePlatform() ? Capacitor.getPlatform() : null;
+/** The Android app downloads and installs updates itself (the whole APK, not only the changes). */
+export const updatesInApp = phone === "android";
 const current = __APP_VERSION__;
 const announced = new Set<string>();
 
@@ -58,7 +69,7 @@ async function checkPhone(set: (s: Partial<AppUpdateState>) => void) {
       current,
       version,
       notes: (release.body ?? "").slice(0, 4000),
-      canInstall: false,
+      canInstall: updatesInApp && !!apk,
       url: (phone === "android" ? apk : phone === "ios" ? ipa : undefined) ?? release.html_url ?? `${RELEASES}/latest`,
     };
     set({ state });
@@ -68,20 +79,59 @@ async function checkPhone(set: (s: Partial<AppUpdateState>) => void) {
   }
 }
 
+const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+async function downloadAndroid(state: Extract<UpdateState, { status: "available" }>, set: (s: Partial<AppUpdateState>) => void) {
+  const { version, notes } = state;
+  set({ state: { status: "downloading", current, version, notes, percent: 0, transferred: 0, total: 0 } });
+  const progress = await AndroidUpdater.addListener("progress", ({ transferred, total }) => {
+    const percent = total > 0 ? Math.min(100, (transferred / total) * 100) : 0;
+    set({ state: { status: "downloading", current, version, notes, percent, transferred, total: Math.max(total, 0) } });
+  });
+  try {
+    await AndroidUpdater.download({ url: state.url });
+    set({ state: { status: "downloaded", current, version, notes } });
+  } catch (e) {
+    set({ state: { status: "error", current, version, message: messageOf(e) } });
+  } finally {
+    void progress.remove();
+  }
+}
+
 export const useAppUpdate = create<AppUpdateState>((set, get) => ({
   state: { status: desktop?.update || phone ? "idle" : "unsupported", current },
 
   check: async () => {
     if (desktop?.update) set({ state: await desktop.update.check() });
-    else if (phone) await checkPhone(set);
+    else if (phone) {
+      // Don't drop an update that's being downloaded or waits to be installed.
+      const { status } = get().state;
+      if (status !== "downloading" && status !== "downloaded") await checkPhone(set);
+    }
   },
   download: async () => {
     const { state } = get();
     if (desktop?.update) set({ state: await desktop.update.download() });
+    else if (state.status === "available" && state.canInstall) await downloadAndroid(state, set);
     else if (state.status === "available") window.open(state.url, "_blank", "noopener");
+    else if (state.status === "error" && state.version) {
+      // Retry: look the release up again, then download it.
+      await checkPhone(set);
+      const next = get().state;
+      if (next.status === "available" && next.canInstall) await downloadAndroid(next, set);
+    }
   },
   install: async () => {
+    const { state } = get();
     if (desktop?.update) set({ state: await desktop.update.install() });
+    else if (updatesInApp && state.status === "downloaded") {
+      try {
+        // Android takes over from here: it may ask to allow installs or to confirm, then closes and replaces Earful.
+        await AndroidUpdater.install();
+      } catch (e) {
+        set({ state: { status: "error", current, version: state.version, message: messageOf(e) } });
+      }
+    }
   },
   openRelease: () => {
     const { state } = get();
@@ -101,6 +151,14 @@ if (desktop?.update) {
     announce(state);
   });
 } else if (phone) {
+  if (updatesInApp) {
+    void AndroidUpdater.addListener("installFailed", ({ message }) => {
+      const s = useAppUpdate.getState().state;
+      if (s.status === "downloaded" || s.status === "available") {
+        useAppUpdate.setState({ state: { status: "error", current, version: s.version, message } });
+      }
+    });
+  }
   setTimeout(() => void useAppUpdate.getState().check(), 10_000);
   setInterval(() => void useAppUpdate.getState().check(), PHONE_CHECK_EVERY_MS);
 }

@@ -251,6 +251,7 @@ export const en = {
     radioContinuing: (title: string) => `Continuing with radio from "${title}"`,
     playsNext: (title: string) => `"${title}" plays next`,
     addedToQueue: (title: string) => `"${title}" added to the queue`,
+    addedManyToQueue: (n: number) => `${count(n, "song", "songs")} added to the queue`,
     startingRadio: (title: string) => `Building radio from "${title}"`,
     cantPlay: (title: string, reason: string) => `Couldn't play "${title}". ${reason}`,
     aTrack: "this track",
@@ -596,6 +597,9 @@ export const en = {
     restart: "Restart to update",
     available: (v: string) => `Earful ${v} is available`,
     view: "See",
+    readyFull: (current: string) => `You have ${current}. Download it here, then install it; Earful closes and updates itself.`,
+    installReady: "Downloaded. Tap Install: Earful closes while Android updates it, then open it again. Your library and settings stay as they are.",
+    install: "Install and restart",
   },
 
   toasts: {
