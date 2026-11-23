@@ -10,7 +10,7 @@ import {
   type SystemJob,
   type SystemMedia,
 } from "./apiTypes";
-import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Playlist, Track } from "./types";
+import type { AlbumCard, AlbumPage, ArtistPage, Genre, GenreArtist, GenrePage, Library, Lyrics, Playlist, Track } from "./types";
 
 // The HTTP backend: the Earful server (web app, desktop app). The Android build swaps this module for native/api.ts.
 export * from "./apiTypes";
@@ -45,6 +45,15 @@ export const api: EarfulApi = {
   genre: (id: string, signal?: AbortSignal) => request<GenrePage>(`/api/genres/${encodeURIComponent(id)}`, { signal }),
   genreArtists: (id: string, offset: number) =>
     request<{ artists: GenreArtist[]; hasMore: boolean }>(`/api/genres/${encodeURIComponent(id)}/artists?offset=${offset}`),
+  artistId: (name) => request<{ id: string | null }>(`/api/artist-id?name=${encodeURIComponent(name)}`).then((r) => r.id),
+  lyrics: (track) => {
+    const { id, title, artist, album, duration } = track;
+    const params = new URLSearchParams({ title, artist, album: album ?? "", duration: String(duration) });
+    return request<Lyrics>(`/api/lyrics/${encodeURIComponent(id)}?${params}`).catch((error) => {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    });
+  },
   artist: (id: string, signal?: AbortSignal) => request<ArtistPage>(`/api/artists/${encodeURIComponent(id)}`, { signal }),
   album: (id: string, signal?: AbortSignal) => request<AlbumPage>(`/api/albums/${encodeURIComponent(id)}`, { signal }),
   searchAlbums: (q: string, signal?: AbortSignal) =>

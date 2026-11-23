@@ -1,7 +1,10 @@
+export const ARTIST_ID = /^UC[\w-]{22}$/;
+
 export interface Track {
   id: string;
   title: string;
   artist: string;
+  artists?: { name: string; id?: string }[];
   album?: string;
   duration: number;
   thumb: string;

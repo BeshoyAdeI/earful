@@ -1,8 +1,8 @@
 import type { Innertube } from "youtubei.js";
 import { isLang, msg, type Lang } from "./i18n.js";
-import { sized, text, toTrack, withClient } from "./search.js";
+import { sized, text, toTrack, trackArtists, withClient } from "./search.js";
 import type { Track } from "./types.js";
-import { HttpError, VIDEO_ID } from "./types.js";
+import { ARTIST_ID, HttpError, VIDEO_ID } from "./types.js";
 
 export interface Genre {
   /** YouTube Music's opaque "params" for the genre page. */
@@ -66,7 +66,7 @@ export interface AlbumPage {
 export const ALBUM_ID = /^MPRE[\w-]{6,60}$/;
 
 export const GENRE_ID = /^[\w-]{8,120}={0,2}$/;
-export const ARTIST_ID = /^UC[\w-]{22}$/;
+export { ARTIST_ID } from "./types.js";
 
 const MINUTE = 60_000;
 const ARTISTS_PAGE = 40;
@@ -353,6 +353,19 @@ const artistPage = cached(30 * MINUTE, async (key): Promise<ArtistPage> => {
 
 export const artist = (id: string, lang: Lang) => artistPage(keyOf(lang, id));
 
+const normalizedArtistName = (name: string) => name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+const lookupArtistId = cached(60 * MINUTE, async (key): Promise<string | null> => {
+  const { lang, id: name } = parseKey(key);
+  const result = await withClient((yt) => yt.music.search(name, { type: "artist" }), lang);
+  const artists = (result.contents ?? []).flatMap(itemsOf)
+    .filter((item) => item.item_type === "artist" && typeof item.id === "string" && ARTIST_ID.test(item.id));
+  const match = artists.find((item) => normalizedArtistName(text(item.name)) === normalizedArtistName(name));
+  return (match ?? artists[0])?.id ?? null;
+});
+
+export const artistId = (name: string, lang: Lang) => lookupArtistId(keyOf(lang, name.trim().slice(0, 200)));
+
 /** An album's tracks in order. Its tracks carry no cover or artist of their own: they get the album's. */
 const albumPage = cached(60 * MINUTE, async (key): Promise<AlbumPage> => {
   const { lang, id } = parseKey(key);
@@ -364,21 +377,32 @@ const albumPage = cached(60 * MINUTE, async (key): Promise<AlbumPage> => {
   const artistRuns: any[] = header?.strapline_text_one?.runs ?? [];
   const artist = text(header?.strapline_text_one) || text(header?.author?.name);
   const artistId: string | null = artistRuns.map((r) => r?.endpoint?.payload?.browseId).find((b) => ARTIST_ID.test(b ?? "")) ?? null;
+  const albumArtists = trackArtists(artistRuns.flatMap((run) => {
+    const id = run?.endpoint?.payload?.browseId;
+    return ARTIST_ID.test(id ?? "") ? [{ name: run.text, id }] : [];
+  }));
+  if (!albumArtists.length && header?.author) albumArtists.push(...trackArtists([header.author]));
   const cover = imagesOf(header);
   const tracks = (album.contents ?? [])
     .filter((i: any) => typeof i?.id === "string" && VIDEO_ID.test(i.id))
-    .map(
-      (i: any): Track => ({
+    .map((i: any): Track => {
+      const credits = trackArtists(i.artists ?? []);
+      const artists = credits.length ? credits.map((credit) => ({
+        ...credit,
+        id: credit.id ?? albumArtists.find((a) => a.name === credit.name)?.id,
+      })) : albumArtists;
+      return {
         id: i.id,
         title: text(i.title) || "Untitled",
-        artist: (i.artists ?? []).map((a: { name?: string }) => text(a?.name)).filter(Boolean).join(", ") || artist,
+        artist: artists.map((a) => a.name).join(", ") || artist,
+        artists: artists.length ? artists : undefined,
         album: title,
         duration: i.duration?.seconds ?? 0,
         thumb: sized(cover.art, 120),
         art: cover.art,
         kind: "song",
-      }),
-    );
+      };
+    });
   if (!title && !tracks.length) throw new HttpError(404, msg("albumNotFound"));
   return {
     id,

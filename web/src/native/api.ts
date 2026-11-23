@@ -6,6 +6,7 @@ import {
   ALBUM_ID,
   artist as artistPage,
   ARTIST_ID,
+  artistId,
   GENRE_ID,
   genre as genrePage,
   genreArtists,
@@ -13,6 +14,7 @@ import {
   searchAlbums,
 } from "../../../server/src/browse";
 import { msg, tr, type MsgKey } from "../../../server/src/i18n";
+import { lyricsFor } from "../../../server/src/lyrics";
 import * as library from "../../../server/src/library";
 import { findVideoFor, radio, search, suggestions } from "../../../server/src/search";
 import { HttpError, VIDEO_ID } from "../../../server/src/types";
@@ -72,6 +74,8 @@ export const api: EarfulApi = {
       return genrePage(id, getLang());
     }, signal),
   genreArtists: (id, offset) => call(() => genreArtists(id, offset, getLang())),
+  artistId: (name) => call(() => artistId(name, getLang())),
+  lyrics: (track) => call(() => lyricsFor(track, getLang())),
   artist: (id, signal) =>
     call(async () => {
       if (!ARTIST_ID.test(id)) throw fail(400, "invalidArtist");

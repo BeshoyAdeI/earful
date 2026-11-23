@@ -1,7 +1,10 @@
+export type { LyricLine, Lyrics } from "../../../server/src/lyrics";
+
 export interface Track {
   id: string;
   title: string;
   artist: string;
+  artists?: { name: string; id?: string }[];
   album?: string;
   duration: number;
   thumb: string;

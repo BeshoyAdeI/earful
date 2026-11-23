@@ -318,6 +318,15 @@ export const pt: Messages = {
     noSongsBody: "Tente outro gênero.",
   },
 
+  lyrics: {
+    title: "Letra",
+    loading: "Carregando a letra",
+    empty: "Sem letra para esta música",
+    instrumental: "Instrumental",
+    error: "Não foi possível carregar a letra",
+    lrclib: "Letra do LRCLIB",
+    youtube: "Letra do YouTube Music",
+  },
   artist: {
     fallbackName: "Artista",
     label: "Artista",

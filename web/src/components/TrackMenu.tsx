@@ -19,6 +19,7 @@ import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
 import { useDownloads } from "../stores/downloads";
 import { useUi } from "../stores/ui";
+import { ArtistLinks } from "./ArtistLinks";
 import { Artwork } from "./Artwork";
 
 function Item({ icon, children, onClick, danger }: { icon: ReactNode; children: ReactNode; onClick: () => void; danger?: boolean }) {
@@ -165,7 +166,7 @@ export function TrackMenu() {
                   <Artwork src={menu.track.thumb} className="size-12 rounded-[10px]" />
                   <div className="min-w-0">
                     <p className="truncate font-medium">{menu.track.title}</p>
-                    <p className="truncate text-sm text-fg-2">{menu.track.artist}</p>
+                    <p className="truncate text-sm text-fg-2"><ArtistLinks track={menu.track} onNavigate={close} /></p>
                   </div>
                 </div>
                 <div className="mx-3 mb-1 h-px bg-line" />

@@ -2,6 +2,7 @@ import { ArrowLeftIcon, ArrowsClockwiseIcon, CaretDownIcon, CheckIcon, ListBulle
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { create } from "zustand";
+import { ArtistLinks } from "../components/ArtistLinks";
 import { Artwork } from "../components/Artwork";
 import { EmptyState, PageHeader } from "../components/Page";
 import { SelectableRow, SelectedCount, SelectionBar } from "../components/Selection";
@@ -280,24 +281,27 @@ function EntryRow({ entry, index }: { entry: Entry; index: number }) {
       {open && (
         <ul className="mb-2 ml-11 flex flex-col border-l border-line pl-2 md:ml-12">
           {entry.options.map((opt, j) => (
-            <li key={opt.id}>
+            <li key={opt.id} className="relative rounded-xl hover:bg-surface-2">
               <button
                 type="button"
+                aria-label={t.selection.select(opt.title)}
                 onClick={() => {
                   update(index, { pick: j, selected: true });
                   setOpen(false);
                 }}
-                className="flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-surface-2"
-              >
+                className="absolute inset-0 rounded-xl"
+              />
+              <div className="pointer-events-none flex w-full items-center gap-3 px-2 py-1.5 text-left">
                 <Artwork src={opt.thumb} className="size-9 rounded-[8px]" />
                 <span className="min-w-0 flex-1">
                   <span className={cn("block truncate text-sm font-medium", j === entry.pick && "text-accent-text")}>{opt.title}</span>
                   <span className="block truncate text-[13px] text-fg-2">
-                    {[opt.artist, opt.album].filter(Boolean).join(" · ") || t.common.youtube}
+                    <ArtistLinks track={opt} fallback={opt.album ? undefined : t.common.youtube} />
+                    {opt.album && (opt.artist ? ` · ${opt.album}` : opt.album)}
                   </span>
                 </span>
                 {j === entry.pick && <CheckIcon size={16} className="text-accent-text" />}
-              </button>
+              </div>
             </li>
           ))}
         </ul>
