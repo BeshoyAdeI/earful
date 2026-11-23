@@ -11,6 +11,8 @@ const data = { directory: Directory.Data } as const;
 const text = { ...data, encoding: Encoding.UTF8 } as const;
 const ios = Capacitor.getPlatform() === "ios";
 const iosUserAgent = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)";
+/** Size of each download piece: small enough to pass through the web view as base64 comfortably. */
+const PIECE_BYTES = 4 * 1024 * 1024;
 
 interface FileEntry {
   track: Track;
@@ -115,17 +117,41 @@ async function fetchFile(id: string, path: string, onProgress?: (value: number) 
   const download = async () => {
     const audio = await resolveAudio(id);
     const expected = Number(new URL(audio.url).searchParams.get("clen"));
+    let done = 0; // bytes already in `path` from earlier pieces
+    let current = audio.url;
     const listener = onProgress && await Filesystem.addListener("progress", ({ url, bytes, contentLength }) => {
-      if (url === audio.url && (expected || contentLength) > 0) {
-        onProgress(Math.min(0.99, bytes / (expected || contentLength)));
+      if (url === current && (expected || contentLength) > 0) {
+        onProgress(Math.min(0.99, (done + bytes) / (expected || contentLength)));
       }
     });
-    try {
-      await Filesystem.downloadFile({
-        ...data, path, url: audio.url, recursive: true, progress: !!onProgress,
+    const get = (url: string, to: string) => {
+      current = url;
+      return Filesystem.downloadFile({
+        ...data, path: to, url, recursive: true, progress: !!onProgress,
         headers: ios ? { "User-Agent": iosUserAgent } : {},
         connectTimeout: 15_000, readTimeout: 30_000,
       });
+    };
+    try {
+      if (!expected) await get(audio.url, path);
+      else {
+        // YouTube throttles one long request for a whole file to about playback speed; pieces asked for with
+        // its `range` URL parameter come at full speed (as yt-dlp does). Each piece is appended to the file.
+        const piece = `${path}.piece`;
+        while (done < expected) {
+          const url = new URL(audio.url);
+          url.searchParams.set("range", `${done}-${Math.min(done + PIECE_BYTES, expected) - 1}`);
+          await get(url.toString(), piece);
+          const { data: chunk } = await Filesystem.readFile({ ...data, path: piece });
+          if (typeof chunk !== "string" || !chunk) throw new Error("Empty audio piece");
+          if (done === 0) await Filesystem.writeFile({ ...data, path, data: chunk });
+          else await Filesystem.appendFile({ ...data, path, data: chunk });
+          const size = (await stat(path))?.size ?? 0;
+          await Filesystem.deleteFile({ ...data, path: piece }).catch(() => {});
+          if (size <= done) throw new Error("Incomplete audio transfer");
+          done = size;
+        }
+      }
       const bytes = (await stat(path))?.size ?? 0;
       if (!bytes || (expected && bytes !== expected)) throw new Error("Incomplete audio transfer");
       return { mime: audio.mime, bytes };

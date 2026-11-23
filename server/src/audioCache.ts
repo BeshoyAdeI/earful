@@ -1,7 +1,7 @@
 import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
+import { once } from "node:events";
 import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { config } from "./config.js";
 import { msg } from "./i18n.js";
 import { getSettings, readJson, writeJson } from "./settings.js";
@@ -12,6 +12,12 @@ export function audioExtension(mime: string) {
   return mime.startsWith("audio/webm") ? "webm" : "m4a";
 }
 
+/**
+ * googlevideo throttles one long request for a whole file to about playback speed (a 5 MB song took minutes);
+ * pieces asked for with its `range` URL parameter come at full speed. yt-dlp downloads the same way.
+ */
+const CHUNK_BYTES = 10 * 1024 * 1024;
+
 export async function fetchAudio(id: string, file: string, signal?: AbortSignal, progress?: (value: number) => void) {
   const transfer = new AbortController();
   signal = signal ? AbortSignal.any([signal, transfer.signal]) : transfer.signal;
@@ -20,45 +26,59 @@ export async function fetchAudio(id: string, file: string, signal?: AbortSignal,
     clearTimeout(idle);
     idle = setTimeout(() => transfer.abort(), 30_000).unref();
   };
-  const request = async () => {
+  const request = async (start: number) => {
     const resolved = await resolveStreams(id);
+    const url = new URL(resolved.audio.url);
+    url.searchParams.set("range", `${start}-${start + CHUNK_BYTES - 1}`);
     const headers = new Headers(resolved.audio.headers);
     headers.delete("range");
     resetTimeout();
-    const response = await fetch(resolved.audio.url, { headers, signal });
+    const response = await fetch(url, { headers, signal });
     return { resolved, response };
   };
 
+  const out = createWriteStream(file);
   try {
-    let { resolved, response } = await request();
-    if (response.status === 403 || response.status === 410) {
-      await response.body?.cancel();
-      clearTimeout(idle);
-      invalidate(id);
-      ({ resolved, response } = await request());
-    }
-    if (response.status !== 200 || !response.body) {
-      await response.body?.cancel();
-      throw new HttpError(502, msg("streamRefused", { status: response.status }));
-    }
-
-    const expected = Number(new URL(resolved.audio.url).searchParams.get("clen"));
-    const total = expected || Number(response.headers.get("content-length"));
+    let resolved: Awaited<ReturnType<typeof resolveStreams>> | undefined;
+    let total = 0;
     let received = 0;
-    await pipeline(Readable.fromWeb(response.body as any), async function* (source) {
-      for await (const chunk of source) {
+    for (;;) {
+      let next = await request(received);
+      if (next.response.status === 403 || next.response.status === 410) {
+        // Expired URL: resolve again once per piece. A different format would not continue the same file.
+        await next.response.body?.cancel();
+        invalidate(id);
+        next = await request(received);
+        if (resolved && next.resolved.audio.formatId !== resolved.audio.formatId) {
+          await next.response.body?.cancel();
+          throw new HttpError(502, msg("incompleteAudio"));
+        }
+      }
+      const { response } = next;
+      if (!response.ok || !response.body) {
+        await response.body?.cancel();
+        throw new HttpError(502, msg("streamRefused", { status: response.status }));
+      }
+      resolved = next.resolved;
+      total ||= Number(new URL(resolved.audio.url).searchParams.get("clen")) || 0;
+
+      let piece = 0;
+      for await (const chunk of Readable.fromWeb(response.body as any) as AsyncIterable<Buffer>) {
         resetTimeout();
+        piece += chunk.length;
         received += chunk.length;
         if (total) progress?.(Math.min(0.99, received / total));
-        yield chunk;
+        if (!out.write(chunk)) await once(out, "drain", { signal });
       }
-    }, createWriteStream(file), { signal });
-    if (!received || (total && received !== total)) {
-      throw new HttpError(502, msg("incompleteAudio"));
+      // Done when the known size is reached, or (size unknown) when a piece comes back short.
+      if (!piece || (total ? received >= total : piece < CHUNK_BYTES)) break;
     }
-    return resolved;
+    await new Promise<void>((resolve, reject) => out.end((error?: Error | null) => (error ? reject(error) : resolve())));
+    if (!received || (total && received !== total)) throw new HttpError(502, msg("incompleteAudio"));
+    return resolved!;
   } finally {
     clearTimeout(idle);
+    if (!out.closed) out.destroy();
   }
 }
 
