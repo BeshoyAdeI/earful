@@ -156,6 +156,7 @@ export const en = {
 
   player: {
     repeatOff: "Repeat: off",
+    modeOrder: "Play in order",
     repeatAll: "Repeat: queue",
     repeatOne: "Repeat: track",
     shuffleOn: "Shuffle: on",

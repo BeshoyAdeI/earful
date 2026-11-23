@@ -150,6 +150,7 @@ export const pt: Messages = {
 
   player: {
     repeatOff: "Repetir: desligado",
+    modeOrder: "Tocar em ordem",
     repeatAll: "Repetir: fila",
     repeatOne: "Repetir: faixa",
     shuffleOn: "Ordem aleatória: ligada",

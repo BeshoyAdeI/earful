@@ -1,14 +1,14 @@
 import {
+  ArrowLeftIcon,
   CaretDownIcon,
   MagnifyingGlassIcon,
   MicrophoneStageIcon,
-  QueueIcon,
   RadioIcon,
   VideoCameraSlashIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useDragControls, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MD, XL, useMediaQuery } from "../hooks/useMediaQuery";
 import { useT } from "../i18n";
@@ -247,7 +247,8 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
   const track = usePlayer(selectCurrent);
   const reduce = useReducedMotion();
   const drag = useDragControls();
-  const [view, setView] = useState<"player" | "queue" | "lyrics">("player");
+  const [view, setView] = useState<"player" | "queue">("player");
+  const lyricsCard = useRef<HTMLElement>(null);
   const t = useT();
 
   return createPortal(
@@ -289,21 +290,11 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
               </IconButton>
               <div className="pointer-events-none absolute left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-fg-3/50" />
               <div className="flex-1" />
-              <IconButton
-                label={view === "lyrics" ? t.nowPlaying.backToPlayer : t.lyrics.title}
-                active={view === "lyrics"}
-                onClick={() => setView(view === "lyrics" ? "player" : "lyrics")}
-              >
-                <MicrophoneStageIcon size={22} />
-              </IconButton>
-              <IconButton
-                label={view === "queue" ? t.nowPlaying.backToPlayer : t.nowPlaying.showQueue}
-                active={view === "queue"}
-                onClick={() => setView(view === "queue" ? "player" : "queue")}
-                className="-mr-2"
-              >
-                <QueueIcon size={22} />
-              </IconButton>
+              {view === "queue" && (
+                <IconButton label={t.nowPlaying.backToPlayer} onClick={() => setView("player")} className="-mr-2 text-fg">
+                  <ArrowLeftIcon size={22} />
+                </IconButton>
+              )}
             </div>
 
             {view === "queue" ? (
@@ -311,22 +302,36 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
                 <QueueList />
               </div>
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col justify-evenly gap-4 pb-[calc(16px+env(safe-area-inset-bottom))]">
-                {view === "lyrics" ? (
-                  <div className="min-h-0 flex-1 overflow-hidden">
-                    <LyricsView track={track} />
-                  </div>
-                ) : (
+              // The player fills the first screen; the lyrics wait just below it (scroll down, or tap "Lyrics").
+              <div className="scroll-area -mx-5 min-h-0 flex-1 overflow-y-auto overscroll-contain px-5">
+                <div className="flex min-h-full flex-col justify-evenly gap-4 pb-3">
                   <div className="touch-none" onPointerDown={(e) => drag.start(e)}>
                     <Stage track={track} slot={SLOT.sheet} className="max-w-[min(100%,46dvh)]" />
                   </div>
-                )}
-                <div className="flex shrink-0 flex-col gap-4">
-                  <TrackHeading track={track} large />
-                  <Scrubber touch />
-                  <Transport big />
-                  <ModeSwitch className="justify-center" />
+                  <div className="flex shrink-0 flex-col gap-4">
+                    <TrackHeading track={track} large />
+                    <Scrubber touch />
+                    <Transport big onQueue={() => setView("queue")} />
+                    <ModeSwitch className="justify-center" />
+                    <button
+                      type="button"
+                      onClick={() => lyricsCard.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                      className="mx-auto flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium text-fg-2 hover:text-fg"
+                    >
+                      <MicrophoneStageIcon size={14} /> {t.lyrics.title} <CaretDownIcon size={12} />
+                    </button>
+                  </div>
                 </div>
+                <section
+                  ref={lyricsCard}
+                  aria-label={t.lyrics.title}
+                  className="mb-[calc(16px+env(safe-area-inset-bottom))] flex h-[72dvh] scroll-mt-2 flex-col rounded-[20px] bg-surface-1/80 px-2 pt-3 ring-1 ring-line backdrop-blur"
+                >
+                  <h3 className="px-2 pb-1 text-sm font-semibold">{t.lyrics.title}</h3>
+                  <div className="min-h-0 flex-1">
+                    <LyricsView track={track} />
+                  </div>
+                </section>
               </div>
             )}
           </div>

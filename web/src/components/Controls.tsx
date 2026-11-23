@@ -11,6 +11,7 @@ import {
   SpeakerHighIcon,
   SpeakerLowIcon,
   SpeakerXIcon,
+  QueueIcon,
   VideoCameraIcon,
 } from "@phosphor-icons/react";
 import { useState } from "react";
@@ -32,7 +33,40 @@ export function PlayPauseIcon({ size = 22 }: { size?: number }) {
   return status === "playing" ? <PauseIcon size={size} weight="fill" /> : <PlayIcon size={size} weight="fill" />;
 }
 
-export function Transport({ big = false }: { big?: boolean }) {
+/** The phone player's play order, one button for all of it: in order → shuffle → repeat queue → repeat track. */
+type PlayMode = "order" | "shuffle" | "all" | "one";
+const PLAY_MODES: PlayMode[] = ["order", "shuffle", "all", "one"];
+
+function PlayModeButton({ disabled }: { disabled: boolean }) {
+  const t = useT();
+  const { shuffle, repeat, toggleShuffle, cycleRepeat } = usePlayer(
+    useShallow((s) => ({ shuffle: s.shuffle, repeat: s.repeat, toggleShuffle: s.toggleShuffle, cycleRepeat: s.cycleRepeat })),
+  );
+  // Repeat wins when both are on (set from the desktop layout): that's what decides the next track.
+  const mode: PlayMode = repeat === "one" ? "one" : repeat === "all" ? "all" : shuffle ? "shuffle" : "order";
+  const nextMode = PLAY_MODES[(PLAY_MODES.indexOf(mode) + 1) % PLAY_MODES.length]!;
+  const go = () => {
+    const wantShuffle = nextMode === "shuffle";
+    const wantRepeat = nextMode === "all" ? "all" : nextMode === "one" ? "one" : "off";
+    if (shuffle !== wantShuffle) toggleShuffle();
+    // Repeat cycles off → all → one; step until it lands on the wanted value.
+    for (let i = 0; i < 3 && usePlayer.getState().repeat !== wantRepeat; i++) cycleRepeat();
+  };
+  const Glyph = mode === "one" ? RepeatOnceIcon : mode === "all" ? RepeatIcon : ShuffleIcon;
+  const label = { order: t.player.modeOrder, shuffle: t.player.shuffleOn, all: t.player.repeatAll, one: t.player.repeatOne }[mode];
+  return (
+    <IconButton label={label} title={label} active={mode !== "order"} size="lg" onClick={go} disabled={disabled}>
+      <Glyph size={22} />
+      {mode !== "order" && <span className="absolute bottom-0.5 size-1 rounded-full bg-accent-text" />}
+    </IconButton>
+  );
+}
+
+/**
+ * `big`: the phone's full-screen player. Its outer buttons are the play-mode button (left) and the queue (right,
+ * through `onQueue`); the compact desktop bar keeps separate shuffle and repeat buttons.
+ */
+export function Transport({ big = false, onQueue, queueOpen = false }: { big?: boolean; onQueue?: () => void; queueOpen?: boolean }) {
   const t = useT();
   const p = usePlayer(
     useShallow((s) => ({
@@ -54,6 +88,9 @@ export function Transport({ big = false }: { big?: boolean }) {
 
   return (
     <div className={cn("flex items-center", big ? "justify-between" : "gap-2")}>
+      {big ? (
+        <PlayModeButton disabled={!hasTrack} />
+      ) : (
       <IconButton
         label={p.shuffle ? t.player.shuffleOn : t.player.shuffleOff}
         active={p.shuffle}
@@ -64,6 +101,7 @@ export function Transport({ big = false }: { big?: boolean }) {
         <ShuffleIcon size={big ? 22 : 17} />
         {p.shuffle && <span className="absolute bottom-0.5 size-1 rounded-full bg-accent-text" />}
       </IconButton>
+      )}
       <IconButton label={t.player.previous} size={big ? "lg" : "md"} onClick={p.prev} disabled={!hasTrack} className="text-fg">
         <SkipBackIcon size={iconSize} weight="fill" />
       </IconButton>
@@ -78,6 +116,11 @@ export function Transport({ big = false }: { big?: boolean }) {
       <IconButton label={t.player.next} size={big ? "lg" : "md"} onClick={p.next} disabled={!hasTrack} className="text-fg">
         <SkipForwardIcon size={iconSize} weight="fill" />
       </IconButton>
+      {big && onQueue ? (
+        <IconButton label={queueOpen ? t.nowPlaying.backToPlayer : t.nowPlaying.showQueue} active={queueOpen} size="lg" onClick={onQueue}>
+          <QueueIcon size={22} />
+        </IconButton>
+      ) : (
       <IconButton
         label={repeatLabel}
         active={p.repeat !== "off"}
@@ -88,6 +131,7 @@ export function Transport({ big = false }: { big?: boolean }) {
         <RepeatGlyph size={big ? 22 : 17} />
         {p.repeat !== "off" && <span className="absolute bottom-0.5 size-1 rounded-full bg-accent-text" />}
       </IconButton>
+      )}
     </div>
   );
 }
