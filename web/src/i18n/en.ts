@@ -6,6 +6,35 @@
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export const en = {
+  offline: {
+    title: "Offline",
+    subtitle: "Songs you can play without internet",
+    empty: "No offline songs yet",
+    emptyBody: "Play or download a song to add it here.",
+    downloaded: "downloaded",
+    cached: "cached",
+    section: "Offline & cache",
+    keep: "Keep played songs for",
+    days: (n: number) => n === 1 ? "1 day" : `${n} days`,
+    forever: "Forever",
+    clear: "Clear cache",
+    clearConfirm: "Clear all cached songs? Your downloads will be kept.",
+    downloads: "Downloads",
+    folder: "Open folder",
+    folderFailed: "Could not open the downloads folder.",
+    settingsFailed: "Could not update offline settings.",
+    statsFailed: "Could not load cache information.",
+    download: "Download",
+    downloadAll: "Download all",
+    remove: "Remove download",
+    queued: "Queued for download",
+    progress: "Downloading",
+    alreadyAvailable: "These songs are already downloaded or queued.",
+    downloadingSongs: (n: number, skipped: number) =>
+      `Downloading ${n} ${n === 1 ? "song" : "songs"}${skipped ? ` (${skipped} already downloaded or queued)` : ""}`,
+    downloadFailed: "Could not download one or more songs.",
+    removeFailed: "Could not remove the download.",
+  },
   locale: "en-US",
 
   common: {

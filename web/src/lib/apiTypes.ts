@@ -55,6 +55,27 @@ export interface Prepared {
   hasSdVideo: boolean;
 }
 
+export const cacheDaysOptions = [1, 3, 7, 14, 30, 90, 0] as const;
+export type CacheDays = (typeof cacheDaysOptions)[number];
+export interface CacheStats {
+  days: CacheDays;
+  count: number;
+  bytes: number;
+}
+
+export type OfflineTrack = Track & { offline: "downloaded" | "cached" };
+export interface DownloadItem {
+  track: Track;
+  status: "queued" | "downloading" | "done" | "error";
+  progress: number;
+  error?: string;
+}
+
+export interface DownloadList {
+  dir: string;
+  items: DownloadItem[];
+}
+
 /**
  * The operating system's media controls (notification, lock screen, headphone buttons) when the browser's
  * Media Session can't reach them: the Android app. Absent elsewhere.
@@ -77,7 +98,16 @@ export interface EarfulApi {
   searchAlbums(q: string, signal?: AbortSignal): Promise<AlbumCard[]>;
   /** The music video matching a song, or null when YouTube has none. */
   videoFor(t: Track): Promise<Track | null>;
-  prepare(id: string, signal?: AbortSignal): Promise<Prepared>;
+  prepare(id: string, signal?: AbortSignal, audioOnly?: boolean): Promise<Prepared>;
+  cachePlayed(track: Track): Promise<void>;
+  cacheAhead(track: Track): Promise<void>;
+  cacheStats(): Promise<CacheStats>;
+  setCacheDays(days: CacheDays): Promise<CacheStats>;
+  clearCache(): Promise<CacheStats>;
+  offline(): Promise<{ tracks: OfflineTrack[] }>;
+  downloads(): Promise<DownloadList>;
+  download(tracks: Track[]): Promise<{ queued: number; skipped: number }>;
+  removeDownload(id: string): Promise<void>;
 
   library(): Promise<Library>;
   addFavorite(t: Track): Promise<{ favorites: Track[] }>;

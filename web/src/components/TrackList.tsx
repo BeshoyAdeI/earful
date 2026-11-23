@@ -1,14 +1,39 @@
-import { ClockIcon, DotsThreeIcon, HeartIcon, VideoCameraIcon } from "@phosphor-icons/react";
+import { ClockIcon, DotsThreeIcon, DownloadSimpleIcon, HeartIcon, VideoCameraIcon } from "@phosphor-icons/react";
 import { memo, type MouseEvent } from "react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer } from "../player/player";
 import { useAppearance } from "../stores/appearance";
+import { useDownloads } from "../stores/downloads";
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+
+export function DownloadStatus({ track }: { track: Track }) {
+  const item = useDownloads((s) => s.items[track.id]);
+  const t = useT();
+  if (item?.status === "done" || track.offline === "downloaded") {
+    return <DownloadSimpleIcon size={14} weight="bold" className="shrink-0 text-accent-text" aria-label={t.offline.downloaded} />;
+  }
+  if (item?.status === "downloading" || item?.status === "queued") {
+    const progress = Math.round(item.progress * 100);
+    return (
+      <svg
+        viewBox="0 0 16 16"
+        className="size-3.5 shrink-0 text-accent-text"
+        role="progressbar"
+        aria-label={item.status === "queued" ? t.offline.queued : t.offline.progress}
+        aria-valuenow={progress}
+      >
+        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="2" opacity=".25" />
+        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="2" pathLength="100" strokeDasharray={`${progress} 100`} transform="rotate(-90 8 8)" />
+      </svg>
+    );
+  }
+  return null;
+}
 
 interface RowProps {
   track: Track;
@@ -71,6 +96,8 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
         <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-fg-2">
           {track.kind === "video" && <VideoCameraIcon size={13} className="shrink-0 text-fg-3" aria-label={t.common.video} />}
           <span className="truncate">{track.artist || t.common.youtube}</span>
+          <DownloadStatus track={track} />
+          {track.offline && <span className="shrink-0 rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px]">{t.offline[track.offline]}</span>}
         </p>
       </div>
 

@@ -1,5 +1,4 @@
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { Readable } from "node:stream";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { msg } from "./i18n.js";
@@ -27,9 +26,9 @@ export async function proxyStream(req: FastifyRequest, reply: FastifyReply, id: 
   });
 
   const request = async (fmt: StreamFormat) => {
-    const headers: Record<string, string> = { ...fmt.headers };
+    const headers = new Headers(fmt.headers);
     const range = req.headers.range;
-    if (typeof range === "string") headers.Range = range;
+    if (typeof range === "string") headers.set("range", range);
     return fetch(fmt.url, { headers, signal: controller.signal });
   };
 
@@ -59,9 +58,13 @@ export async function proxyStream(req: FastifyRequest, reply: FastifyReply, id: 
   return reply.send(body);
 }
 
-/** Serves a local file with byte-range support (used for cached HD video). */
+/** Holds the open file while streaming so eviction cannot race a later open. */
 export async function serveFile(req: FastifyRequest, reply: FastifyReply, file: string, mime: string) {
-  const { size } = await stat(file);
+  const handle = await open(file, "r");
+  const { size } = await handle.stat().catch(async (error) => {
+    await handle.close();
+    throw error;
+  });
   const range = typeof req.headers.range === "string" ? /bytes=(\d*)-(\d*)/.exec(req.headers.range) : null;
 
   reply.header("content-type", mime);
@@ -70,7 +73,7 @@ export async function serveFile(req: FastifyRequest, reply: FastifyReply, file: 
 
   if (!range) {
     reply.header("content-length", size);
-    return reply.send(createReadStream(file));
+    return reply.send(handle.createReadStream());
   }
 
   let start = range[1] ? Number(range[1]) : NaN;
@@ -82,6 +85,7 @@ export async function serveFile(req: FastifyRequest, reply: FastifyReply, file: 
   }
   end = Math.min(end, size - 1);
   if (start > end || start >= size) {
+    await handle.close();
     reply.code(416).header("content-range", `bytes */${size}`);
     return reply.send();
   }
@@ -89,5 +93,5 @@ export async function serveFile(req: FastifyRequest, reply: FastifyReply, file: 
   reply.code(206);
   reply.header("content-range", `bytes ${start}-${end}/${size}`);
   reply.header("content-length", end - start + 1);
-  return reply.send(createReadStream(file, { start, end }));
+  return reply.send(handle.createReadStream({ start, end }));
 }

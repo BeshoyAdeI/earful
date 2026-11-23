@@ -1,4 +1,5 @@
 import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
+import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 import {
   album as albumPage,
@@ -16,9 +17,10 @@ import * as library from "../../../server/src/library";
 import { findVideoFor, radio, search, suggestions } from "../../../server/src/search";
 import { HttpError, VIDEO_ID } from "../../../server/src/types";
 import { getLang, getT } from "../i18n";
-import { ApiError, type EarfulApi, type SystemInfo } from "../lib/apiTypes";
+import { ApiError, cacheDaysOptions, type EarfulApi, type SystemInfo } from "../lib/apiTypes";
 import "./android";
 import { media } from "./media";
+import * as offline from "./offline";
 import { nativeStorage } from "./storage";
 import { forgetUrl, resolveAudio } from "./streams";
 
@@ -85,9 +87,24 @@ export const api: EarfulApi = {
   prepare: (id, signal) =>
     call(async () => {
       if (!VIDEO_ID.test(id)) throw fail(400, "invalidVideoId");
-      const r = await resolveAudio(id);
+      const r = (await offline.localAudio(id).catch(() => undefined))?.entry.track ?? await resolveAudio(id);
       return { id, title: r.title, duration: r.duration, hasSdVideo: false };
     }, signal),
+  cachePlayed: (track) => call(async () => { await offline.cacheTrack(library.sanitizeTrack(track), true); }),
+  cacheAhead: (track) => call(async () => { await offline.cacheTrack(library.sanitizeTrack(track), false); }),
+  cacheStats: () => call(offline.cacheStats),
+  setCacheDays: (days) => call(async () => {
+    if (!cacheDaysOptions.includes(days)) throw fail(400, "invalidCacheDays");
+    return offline.setCacheDays(days);
+  }),
+  clearCache: () => call(offline.clearCache),
+  offline: () => call(offline.offline),
+  downloads: () => call(offline.downloadStatus),
+  download: (list) => call(() => offline.enqueueDownloads(list.map(library.sanitizeTrack))),
+  removeDownload: (id) => call(async () => {
+    if (!VIDEO_ID.test(id)) throw fail(400, "invalidVideoId");
+    await offline.removeDownload(id);
+  }),
 
   library: () => call(() => library.getLibrary()),
   addFavorite: (t) => call(async () => ({ favorites: await library.addFavorite(library.sanitizeTrack(t)) })),
@@ -114,7 +131,15 @@ export const api: EarfulApi = {
 };
 
 /** On the phone, the media element plays YouTube's stream directly: resolved here, no proxy needed. */
-export const streamSource = (id: string): Promise<string> => resolveAudio(id).then((r) => r.url);
+export async function streamSource(id: string, _kind?: "audio" | "video", _quality?: "sd" | "hd", ahead = false) {
+  const hit = await offline.localAudio(id).catch(() => undefined);
+  if (!hit) {
+    if (ahead) throw fail(404, "noAudio");
+    return (await resolveAudio(id)).url;
+  }
+  // AVPlayer opens the file directly. The WebView needs Capacitor's local HTTP endpoint.
+  return !ahead && Capacitor.getPlatform() === "ios" ? hit.uri : Capacitor.convertFileSrc(hit.uri);
+}
 
 export async function explainStreamError(url: string): Promise<{ message: string }> {
   forgetUrl(url);

@@ -1,13 +1,15 @@
-import { CheckIcon, HeartIcon, PlayIcon, PlaylistIcon, VideoCameraIcon } from "@phosphor-icons/react";
+import { CheckIcon, DownloadSimpleIcon, HeartIcon, PlayIcon, PlaylistIcon, VideoCameraIcon } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
 import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
+import { useDownloads } from "../stores/downloads";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { Equalizer } from "./Brand";
+import { DownloadStatus } from "./TrackList";
 
 export function Check({ on }: { on: boolean }) {
   return (
@@ -127,6 +129,7 @@ export function SelectionBar({
         />
         <Action icon={<HeartIcon size={16} />} label={t.common.favorite} disabled={!chosen.length} onClick={() => void addFavorites(chosen)} />
         <Action icon={<PlaylistIcon size={16} />} label={t.common.playlist} disabled={!chosen.length} onClick={() => openAddToPlaylist(chosen)} />
+        <Action icon={<DownloadSimpleIcon size={16} />} label={t.offline.downloadAll} disabled={!toPlay.length} onClick={() => void useDownloads.getState().download(toPlay)} />
       </div>
     </div>
   );
@@ -196,6 +199,7 @@ export function SelectableRow({
             {track.artist || t.common.youtube}
             {note}
           </span>
+          <DownloadStatus track={track} />
         </span>
       </button>
 

@@ -62,11 +62,12 @@ final class EarfulAudio: NSObject, WKScriptMessageHandler {
 
     private func load(_ link: String, startAt: Double) {
         tearDown()
-        guard let url = URL(string: link), !link.isEmpty else {
+        guard !link.isEmpty else { return }
+        guard let url = URL(string: link) else {
             emit("error", ["message": "No stream"])
             return
         }
-        let asset = AVURLAsset(url: url, options: [
+        let asset = AVURLAsset(url: url, options: url.isFileURL ? nil : [
             "AVURLAssetHTTPHeaderFieldsKey": [
                 "User-Agent": "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)",
             ],

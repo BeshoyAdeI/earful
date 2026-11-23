@@ -1,8 +1,9 @@
 import { DotsThreeIcon, MagnifyingGlassIcon, PauseIcon, PencilSimpleIcon, PlayIcon, ShuffleIcon, TrashIcon } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
 import { NamePlaylistDialog } from "../components/Dialogs";
+import { DownloadAllButton } from "../components/DownloadAllButton";
 import { IconButton, PlayDisc } from "../components/IconButton";
 import { Modal } from "../components/Modal";
 import { EmptyState, PageHeader } from "../components/Page";
@@ -13,16 +14,18 @@ import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
+import { useDownloads } from "../stores/downloads";
 
 interface Props {
   kind: CoverKind;
 }
 
-/** Playlist, Favorites and History share one layout. */
+/** Library collections share one layout. */
 export default function Collection({ kind }: Props) {
   const { id } = useParams();
   const navigate = useNavigate();
   const lib = useLibrary();
+  const offline = useDownloads((s) => s.offlineTracks);
   const playList = usePlayer((s) => s.playList);
   const toggle = usePlayer((s) => s.toggle);
   const queue = usePlayer((s) => s.queue);
@@ -33,10 +36,14 @@ export default function Collection({ kind }: Props) {
   const t = useT();
 
   const playlist = kind === "playlist" ? lib.playlists.find((p) => p.id === id) : undefined;
-  const tracks: Track[] = kind === "favorites" ? lib.favorites : kind === "history" ? lib.history : playlist?.tracks ?? [];
-  const name = kind === "favorites" ? t.nav.favorites : kind === "history" ? t.nav.recentlyPlayed : playlist?.name ?? "";
+  const tracks: Track[] = kind === "favorites" ? lib.favorites : kind === "history" ? lib.history : kind === "offline" ? offline : playlist?.tracks ?? [];
+  const name = kind === "favorites" ? t.nav.favorites : kind === "history" ? t.nav.recentlyPlayed : kind === "offline" ? t.offline.title : playlist?.name ?? "";
   const label =
     kind === "playlist" ? t.collection.labelPlaylist : kind === "favorites" ? t.collection.labelFavorites : t.collection.labelHistory;
+
+  useEffect(() => {
+    if (kind === "offline") void useDownloads.getState().loadOffline();
+  }, [kind]);
 
   if (kind === "playlist" && !playlist) {
     if (lib.status !== "ready") return <PageHeader />;
@@ -76,8 +83,9 @@ export default function Collection({ kind }: Props) {
             className="size-44 shrink-0 rounded-[18px] shadow-[0_24px_60px_rgb(0_0_0/0.4)] md:size-52"
           />
           <div className="flex min-w-0 flex-col items-center gap-2 text-center md:items-start md:text-left">
-            <span className="hidden text-xs font-medium text-fg-2 md:block">{label}</span>
+            {kind !== "offline" && <span className="hidden text-xs font-medium text-fg-2 md:block">{label}</span>}
             <h1 className="max-w-full text-[28px] leading-[1.1] font-bold tracking-tight break-words md:text-5xl lg:text-6xl">{name}</h1>
+            {kind === "offline" && <p className="text-sm text-fg-2">{t.offline.subtitle}</p>}
             <p className="font-mono text-[13px] text-fg-2">
               {t.common.tracks(tracks.length)}
               {total > 0 && <> · {t.time.total(total)}</>}
@@ -106,6 +114,7 @@ export default function Collection({ kind }: Props) {
         >
           <ShuffleIcon size={24} />
         </IconButton>
+        {(kind === "playlist" || kind === "favorites") && <DownloadAllButton tracks={tracks} />}
         {kind === "playlist" && (
           <IconButton label={t.collection.more} size="lg" onClick={() => setMoreOpen(true)}>
             <DotsThreeIcon size={26} weight="bold" />
@@ -119,13 +128,15 @@ export default function Collection({ kind }: Props) {
         ) : (
           <EmptyState
             icon={<MagnifyingGlassIcon size={28} />}
-            title={kind === "history" ? t.collection.emptyHistory : t.collection.empty}
+            title={kind === "offline" ? t.offline.empty : kind === "history" ? t.collection.emptyHistory : t.collection.empty}
             body={
-              kind === "favorites"
-                ? t.collection.emptyFavoritesBody
-                : kind === "history"
-                  ? t.collection.emptyHistoryBody
-                  : t.collection.emptyPlaylistBody
+              kind === "offline"
+                ? t.offline.emptyBody
+                : kind === "favorites"
+                  ? t.collection.emptyFavoritesBody
+                  : kind === "history"
+                    ? t.collection.emptyHistoryBody
+                    : t.collection.emptyPlaylistBody
             }
             action={
               <Link to={paths.search} className="mt-2 h-11 rounded-full bg-accent px-6 text-sm leading-[44px] font-semibold text-accent-ink">

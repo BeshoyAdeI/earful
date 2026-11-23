@@ -1,5 +1,6 @@
 import {
   ArrowSquareOutIcon,
+  DownloadSimpleIcon,
   HeartIcon,
   ListPlusIcon,
   PlayIcon,
@@ -16,6 +17,7 @@ import { useT } from "../i18n";
 import { cn } from "../lib/format";
 import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
+import { useDownloads } from "../stores/downloads";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 
@@ -42,6 +44,7 @@ export function TrackMenu() {
   const close = useUi((s) => s.closeMenu);
   const openAddToPlaylist = useUi((s) => s.openAddToPlaylist);
   const isFavorite = useLibrary((s) => (menu ? s.favorites.some((t) => t.id === menu.track.id) : false));
+  const downloaded = useDownloads((s) => !!menu && (s.isDownloaded(menu.track.id) || menu.track.offline === "downloaded" && !s.dir));
   const isMd = useMediaQuery(MD);
   const box = useRef<HTMLDivElement>(null);
   const t = useT();
@@ -58,6 +61,7 @@ export function TrackMenu() {
 
   useEffect(() => {
     if (!menu) return;
+    void useDownloads.getState().load();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", close);
@@ -95,6 +99,15 @@ export function TrackMenu() {
       </Item>
       <Item icon={<PlaylistIcon size={18} />} onClick={() => openAddToPlaylist([menu.track])}>
         {t.trackMenu.addToPlaylist}
+      </Item>
+      <Item
+        icon={downloaded ? <TrashIcon size={18} /> : <DownloadSimpleIcon size={18} />}
+        onClick={run(() => {
+          const downloads = useDownloads.getState();
+          void (downloaded ? downloads.remove(menu.track.id) : downloads.download([menu.track]));
+        })}
+      >
+        {downloaded ? t.offline.remove : t.offline.download}
       </Item>
       {menu.playlistId && (
         <Item

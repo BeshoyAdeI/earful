@@ -3,6 +3,35 @@ import type { Messages } from "./en";
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export const pt: Messages = {
+  offline: {
+    title: "Offline",
+    subtitle: "Músicas para ouvir sem internet",
+    empty: "Nenhuma música offline por enquanto",
+    emptyBody: "Reproduza ou baixe uma música para adicioná-la aqui.",
+    downloaded: "baixada",
+    cached: "em cache",
+    section: "Offline e cache",
+    keep: "Manter músicas reproduzidas por",
+    days: (n: number) => n === 1 ? "1 dia" : `${n} dias`,
+    forever: "Para sempre",
+    clear: "Limpar cache",
+    clearConfirm: "Limpar todas as músicas em cache? Seus downloads serão mantidos.",
+    downloads: "Downloads",
+    folder: "Abrir pasta",
+    folderFailed: "Não foi possível abrir a pasta de downloads.",
+    settingsFailed: "Não foi possível atualizar as configurações offline.",
+    statsFailed: "Não foi possível carregar as informações do cache.",
+    download: "Baixar",
+    downloadAll: "Baixar tudo",
+    remove: "Remover download",
+    queued: "Na fila de downloads",
+    progress: "Baixando",
+    alreadyAvailable: "Essas músicas já foram baixadas ou estão na fila.",
+    downloadingSongs: (n: number, skipped: number) =>
+      `Baixando ${n} ${n === 1 ? "música" : "músicas"}${skipped ? ` (${skipped} já ${skipped === 1 ? "baixada ou na fila" : "baixadas ou na fila"})` : ""}`,
+    downloadFailed: "Não foi possível baixar uma ou mais músicas.",
+    removeFailed: "Não foi possível remover o download.",
+  },
   locale: "pt-BR",
 
   common: {

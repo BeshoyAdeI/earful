@@ -2,6 +2,7 @@ import { ArrowRightIcon, MusicNotesIcon, PauseIcon, PlayIcon, PlaylistIcon, Shuf
 import { useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { Artwork } from "../components/Artwork";
+import { DownloadAllButton } from "../components/DownloadAllButton";
 import { IconButton, PlayDisc } from "../components/IconButton";
 import { BackButton, EmptyState, PageHeader } from "../components/Page";
 import { SelectableTrackList } from "../components/Selection";
@@ -79,7 +80,7 @@ export default function Album() {
       </div>
 
       {album && tracks.length > 0 && (
-        <div className="flex items-center gap-2 px-4 pb-4 md:px-6">
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-4 md:px-6">
           <PlayDisc
             label={playing ? t.common.pause : t.album.play(album.title)}
             px={56}
@@ -90,6 +91,7 @@ export default function Album() {
           <IconButton label={t.album.shuffle} size="lg" onClick={() => playList(shuffled(tracks), 0)}>
             <ShuffleIcon size={24} />
           </IconButton>
+          <DownloadAllButton tracks={tracks} />
           {saved ? (
             <Link
               to={paths.playlist(saved)}

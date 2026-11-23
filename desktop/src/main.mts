@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain, Menu, screen, shell } from "electron";
@@ -22,6 +22,8 @@ const userData = app.getPath("userData");
 process.env.EARFUL_DATA_DIR = path.join(userData, "data");
 process.env.EARFUL_CACHE_DIR = path.join(userData, "cache");
 process.env.EARFUL_BIN_DIR = path.join(userData, "bin");
+const downloadDir = path.resolve(process.env.EARFUL_DOWNLOAD_DIR ?? path.join(app.getPath("music"), "Earful"));
+process.env.EARFUL_DOWNLOAD_DIR = downloadDir;
 process.env.EARFUL_WEB_DIST = app.isPackaged ? path.join(process.resourcesPath, "web") : path.resolve(here, "..", "..", "web", "dist");
 
 // A copy of the library from before each update, in userData/backups (the installer makes one too).
@@ -188,6 +190,16 @@ ipcMain.on("earful:theme", (event, theme: "dark" | "light") => {
   const colors = THEME[theme] ?? THEME.dark;
   if (!isMac) win?.setTitleBarOverlay({ ...colors, height: TITLEBAR_HEIGHT });
   win?.setBackgroundColor(colors.color);
+});
+
+ipcMain.handle("earful:open-path", async (_event, target: unknown) => {
+  if (target !== downloadDir) return false;
+  try {
+    mkdirSync(downloadDir, { recursive: true });
+    return (await shell.openPath(downloadDir)) === "";
+  } catch {
+    return false;
+  }
 });
 
 ipcMain.on("earful:lang", (_event, next: unknown) => {

@@ -4,6 +4,7 @@ interface DesktopBridge {
   setTheme: (theme: "dark" | "light") => void;
   /** Missing in desktop builds older than 1.2. */
   setLanguage?: (lang: string) => void;
+  openPath?: (path: string) => Promise<boolean>;
 }
 
 export const desktop = (window as Window & { earfulDesktop?: DesktopBridge }).earfulDesktop;

@@ -1,6 +1,7 @@
 import {
   BooksIcon,
   ClockCounterClockwiseIcon,
+  DownloadSimpleIcon,
   GearSixIcon,
   HeartIcon,
   HouseIcon,
@@ -159,6 +160,11 @@ export function Rail() {
           <RailLink to={paths.history} label={t.nav.recentlyPlayed} sub={t.nav.history}>
             <span className="grid size-full place-items-center bg-surface-3 text-fg-2">
               <ClockCounterClockwiseIcon size={20} />
+            </span>
+          </RailLink>
+          <RailLink to={paths.offline} label={t.offline.title} sub={t.offline.subtitle}>
+            <span className="grid size-full place-items-center bg-surface-3 text-fg-2">
+              <DownloadSimpleIcon size={20} />
             </span>
           </RailLink>
           {sidebarPlaylists && playlists.map((p) => (

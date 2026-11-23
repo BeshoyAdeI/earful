@@ -19,6 +19,7 @@ import { cn } from "./lib/format";
 import { legacyRedirect, NOW_PLAYING_HASH, paths } from "./lib/routes";
 import { usePlayer } from "./player/player";
 import { useLibrary } from "./stores/library";
+import { useDownloads } from "./stores/downloads";
 import { openSettings, useSystem } from "./stores/system";
 import { toast, useUi } from "./stores/ui";
 import Album from "./views/Album";
@@ -48,6 +49,8 @@ export default function App() {
 
   useEffect(() => {
     void loadLibrary();
+    void useDownloads.getState().load();
+    void useDownloads.getState().loadOffline();
   }, [loadLibrary]);
 
   // Check yt-dlp shortly after start and say so once if something needs doing (not on Android: no yt-dlp there).
@@ -131,6 +134,7 @@ export default function App() {
               <Route path={paths.library} element={<Library />} />
               <Route path={paths.favorites} element={<Collection kind="favorites" />} />
               <Route path={paths.history} element={<Collection kind="history" />} />
+              <Route path={paths.offline} element={<Collection kind="offline" />} />
               <Route path="/playlist/:id" element={<Collection kind="playlist" />} />
               <Route path="*" element={<Home />} />
             </Routes>

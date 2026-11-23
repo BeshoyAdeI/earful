@@ -54,11 +54,20 @@ export const api: EarfulApi = {
     request<{ track: Track | null }>(
       `/api/video-for/${t.id}?${new URLSearchParams({ title: t.title, artist: t.artist, duration: String(t.duration || "") })}`,
     ).then((r) => r.track),
-  prepare: (id: string, signal?: AbortSignal) =>
-    request<Prepared>(`/api/prepare/${id}`, {
+  prepare: (id: string, signal?: AbortSignal, audioOnly?: boolean) =>
+    request<Prepared>(`/api/prepare/${id}${audioOnly ? "?audio=1" : ""}`, {
       method: "POST",
       signal,
     }),
+  cachePlayed: (track) => request(`/api/cache/${track.id}?wait=1`, { method: "POST", json: track }),
+  cacheAhead: (track) => request(`/api/cache/${track.id}?ahead=1`, { method: "POST", json: track }),
+  cacheStats: () => request("/api/cache"),
+  setCacheDays: (days) => request("/api/cache", { method: "PUT", json: { days } }),
+  clearCache: () => request("/api/cache", { method: "DELETE" }),
+  offline: () => request("/api/offline"),
+  downloads: () => request("/api/downloads"),
+  download: (tracks) => request("/api/downloads", { method: "POST", json: { tracks } }),
+  removeDownload: (id) => request(`/api/downloads/${id}`, { method: "DELETE" }),
 
   library: () => request<Library>("/api/library"),
   addFavorite: (t: Track) => request<{ favorites: Track[] }>(`/api/favorites/${t.id}`, { method: "PUT", json: t }),
@@ -82,8 +91,8 @@ export const api: EarfulApi = {
 };
 
 /** What a media element plays for a track: here, the server's stream proxy. The Android backend resolves it on the phone. */
-export const streamSource = (id: string, kind: "audio" | "video", quality: "sd" | "hd"): string | Promise<string> =>
-  kind === "audio" ? `/api/stream/${id}/audio` : `/api/stream/${id}/video?q=${quality}`;
+export const streamSource = (id: string, kind: "audio" | "video", quality: "sd" | "hd", ahead = false): string | Promise<string> =>
+  kind === "audio" ? `/api/stream/${id}/audio${ahead ? "?ahead=1" : ""}` : `/api/stream/${id}/video?q=${quality}`;
 
 /** Saves a text file the way this platform does it: a browser download (the desktop app shows "Save as"). */
 export async function saveFile(name: string, text: string) {

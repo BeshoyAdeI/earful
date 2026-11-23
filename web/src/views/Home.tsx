@@ -1,4 +1,4 @@
-import { ClockCounterClockwiseIcon, HeartIcon, MagnifyingGlassIcon, PlayIcon } from "@phosphor-icons/react";
+import { ClockCounterClockwiseIcon, DownloadSimpleIcon, HeartIcon, MagnifyingGlassIcon, PlayIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { Artwork } from "../components/Artwork";
@@ -11,6 +11,7 @@ import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
 import { useAppearance } from "../stores/appearance";
 import { useLibrary } from "../stores/library";
+import { useDownloads } from "../stores/downloads";
 
 function Shortcut({ to, label, tracks, cover }: { to: string; label: string; tracks: Track[]; cover: ReactNode }) {
   const playList = usePlayer((s) => s.playList);
@@ -53,11 +54,12 @@ function RecentCard({ track, onPlay }: { track: Track; onPlay: () => void }) {
 
 export default function Home() {
   const { favorites, playlists, history, status } = useLibrary();
+  const offline = useDownloads((s) => s.offlineTracks);
   const playList = usePlayer((s) => s.playList);
   const navigate = useNavigate();
   const t = useT();
   const show = useAppearance();
-  const empty = status === "ready" && !favorites.length && !playlists.length && !history.length;
+  const empty = status === "ready" && !favorites.length && !playlists.length && !history.length && !offline.length;
 
   return (
     <div className="pb-8">
@@ -108,6 +110,16 @@ export default function Home() {
               cover={
                 <span className="grid size-full place-items-center bg-surface-3 text-fg-2">
                   <ClockCounterClockwiseIcon size={24} />
+                </span>
+              }
+            />
+            <Shortcut
+              to={paths.offline}
+              label={t.offline.title}
+              tracks={offline}
+              cover={
+                <span className="grid size-full place-items-center bg-surface-3 text-fg-2">
+                  <DownloadSimpleIcon size={24} />
                 </span>
               }
             />

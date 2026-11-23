@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld("earfulDesktop", {
   setTheme: (theme: "dark" | "light") => ipcRenderer.send("earful:theme", theme),
   setLanguage: (lang: string) => ipcRenderer.send("earful:lang", lang),
   retry: () => ipcRenderer.send("earful:retry"),
+  openPath: (path: string): Promise<boolean> => ipcRenderer.invoke("earful:open-path", path),
 });

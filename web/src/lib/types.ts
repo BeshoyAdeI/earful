@@ -7,6 +7,7 @@ export interface Track {
   thumb: string;
   art: string;
   kind: "song" | "video";
+  offline?: "downloaded" | "cached";
 }
 
 export interface Playlist {

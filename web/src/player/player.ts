@@ -5,6 +5,7 @@ import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
 import type { Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
+import { useDownloads } from "../stores/downloads";
 import { openSettings } from "../stores/system";
 import { toast } from "../stores/ui";
 
@@ -133,17 +134,51 @@ function lookupClip(track: Track): Promise<string | null> {
 }
 
 const needsClipLookup = (track: Track, preferVideo: boolean) =>
-  preferVideo && track.kind === "song" && !clipFor.has(track.id);
+  preferVideo && !track.offline && track.kind === "song" && !clipFor.has(track.id);
+
+const nextIndex = (s: PlayerState) => s.index < s.queue.length - 1 ? s.index + 1 : s.repeat === "all" && s.queue.length ? 0 : -1;
+const upcomingTrack = (s: PlayerState) => s.repeat === "one" ? undefined : s.queue[nextIndex(s)];
 
 export const usePlayer = create<PlayerState>((set, get) => {
   const kindFor = (track: Track): Kind =>
-    capabilities.video && get().preferVideo && (track.kind === "video" || !!clipFor.get(track.id)) ? "video" : "audio";
+    capabilities.video && get().preferVideo && !track.offline && (track.kind === "video" || !!clipFor.get(track.id)) ? "video" : "audio";
   /** The YouTube id to stream: the song itself, or its music video in Video mode. */
   const mediaIdFor = (track: Track, kind: Kind) =>
     kind === "video" && track.kind !== "video" ? clipFor.get(track.id)! : track.id;
   const noteFor = (track: Track) =>
-    get().preferVideo && track.kind === "song" && clipFor.get(track.id) === null ? ("noClip" as const) : null;
+    get().preferVideo && !track.offline && track.kind === "song" && clipFor.get(track.id) === null ? ("noClip" as const) : null;
   const activeMedia = (): HTMLMediaElement | null => (loaded ? mediaFor(loaded.kind) : null);
+  let warmedToken = -1;
+  let warming: { id: string; done: Promise<void> } | undefined;
+  let preload: HTMLAudioElement | undefined;
+
+  function dropPreload() {
+    warming = undefined;
+    if (!preload) return;
+    preload.removeAttribute("src");
+    preload.load();
+    preload = undefined;
+  }
+
+  function warmNext(media: HTMLMediaElement) {
+    if (warmedToken === token || media !== audio || media.paused || get().preferVideo ||
+      !Number.isFinite(media.duration) || media.duration <= 0 || media.currentTime < media.duration * 0.8) return;
+    const next = upcomingTrack(get());
+    if (!next || next.id === loaded?.id) return;
+    warmedToken = token;
+    const job = { id: next.id, done: api.cacheAhead(next) };
+    warming = job;
+    void job.done.then(async () => {
+      void useDownloads.getState().loadOffline();
+      if (warming !== job || upcomingTrack(get())?.id !== next.id || get().preferVideo) return;
+      const source = await streamSource(next.id, "audio", get().quality, true);
+      if (warming !== job || upcomingTrack(get())?.id !== next.id || get().preferVideo) return;
+      preload = new Audio();
+      preload.muted = true;
+      preload.preload = "auto";
+      preload.src = source;
+    }).catch(() => {});
+  }
 
   function play(media: HTMLMediaElement) {
     media.play().catch((err: DOMException) => {
@@ -156,6 +191,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const s = get();
     const track = s.queue[index];
     if (!track) return;
+    // The next track's download may still be running (a skip at 85%): give it a moment to land so it plays from
+    // disk, but never hold the start for the whole download — the stream works meanwhile.
+    const ready = !s.preferVideo && warming?.id === track.id
+      ? Promise.race([warming.done, new Promise<void>((r) => setTimeout(r, 1000))])
+      : undefined;
+    dropPreload();
 
     // Video mode on a song: find its music video first, then load whichever fits.
     if (needsClipLookup(track, s.preferVideo)) {
@@ -206,9 +247,13 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (autoplay) play(media);
     };
     // The server's proxy URL is known right away; on Android the stream is first resolved on the phone.
-    const source = streamSource(mediaIdFor(track, kind), kind, s.quality);
+    const getSource = () => streamSource(mediaIdFor(track, kind), kind, s.quality);
+    const source = ready ? ready.catch(() => {}).then(getSource) : getSource();
     if (typeof source === "string") start(source);
     else {
+      media.pause();
+      media.removeAttribute("src");
+      media.load();
       const mine = token;
       source.then(
         (src) => mine === token && start(src),
@@ -244,11 +289,12 @@ export const usePlayer = create<PlayerState>((set, get) => {
     if (!track || recordedToken === token) return;
     recordedToken = token;
     useLibrary.getState().recordPlay(track);
+    void api.cachePlayed(track).then(() => useDownloads.getState().loadOffline()).catch(() => {});
     // Warm up the next track (and, in Video mode, find and resolve its clip) so it starts quickly.
-    const upcoming = s.queue[s.index + 1];
+    const upcoming = s.preferVideo ? s.queue[s.index + 1] : upcomingTrack(s);
     if (!upcoming) return;
     if (s.preferVideo) void lookupClip(upcoming).then((id) => api.prepare(id ?? upcoming.id).catch(() => {}));
-    else api.prepare(upcoming.id).catch(() => {});
+    else api.prepare(upcoming.id, undefined, true).catch(() => {});
   }
 
   function onEnded() {
@@ -261,8 +307,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
       }
       return;
     }
-    if (s.index < s.queue.length - 1) return load(s.index + 1);
-    if (s.repeat === "all" && s.queue.length) return load(0);
+    const next = nextIndex(s);
+    if (next >= 0) return load(next);
     if (s.autoRadio) return void continueWithRadio();
     set({ status: "paused", position: 0 });
   }
@@ -337,6 +383,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     media.addEventListener("timeupdate", () => {
       if (!isActive() || pendingSeek > 0) return;
       if (Math.abs(media.currentTime - get().position) >= 0.2) set({ position: media.currentTime });
+      warmNext(media);
       syncSystemMedia(); // throttled on the other side
     });
     media.addEventListener("progress", () => {
@@ -400,7 +447,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
     playTrack: (track) => {
       const s = get();
       const at = s.queue.findIndex((t) => t.id === track.id);
-      if (at >= 0) return load(at);
+      if (at >= 0) {
+        if (track.offline && !s.queue[at].offline) set({ queue: s.queue.map((entry, i) => i === at ? track : entry) });
+        return load(at);
+      }
       if (!s.queue.length) return get().playList([track]);
       const insert = s.index + 1;
       set({
@@ -440,6 +490,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       set({ queue, original });
       if (queue[i]) load(i, { autoplay: s.status === "playing" });
       else {
+        dropPreload();
         activeMedia()?.pause();
         loaded = null;
         set({ index: Math.max(0, queue.length - 1), status: queue.length ? "paused" : "idle", position: 0 });
@@ -483,8 +534,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     next: () => {
       const s = get();
-      if (s.index < s.queue.length - 1) return load(s.index + 1);
-      if (s.repeat === "all" && s.queue.length) return load(0);
+      const next = nextIndex(s);
+      if (next >= 0) return load(next);
       if (s.autoRadio) void continueWithRadio();
     },
 

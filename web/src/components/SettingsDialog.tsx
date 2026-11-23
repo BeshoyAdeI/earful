@@ -14,6 +14,7 @@ import { cn } from "../lib/format";
 import { useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { BackupSection } from "./BackupSection";
+import { OfflineSection } from "./OfflineSection";
 import { SpotifyImport } from "./SpotifyImport";
 import { AccentPicker, LayoutSection } from "./CustomizeSection";
 import { Modal } from "./Modal";
@@ -154,6 +155,8 @@ export function SettingsDialog() {
         </section>
 
         <LayoutSection />
+
+        {open && <OfflineSection />}
 
         <BackupSection />
 

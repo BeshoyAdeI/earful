@@ -2,11 +2,14 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
+import { cacheAudio, cacheStats, cachedAudio, clearAudioCache, flushAudioCache, listCached, pruneAudioCache } from "./audioCache.js";
 import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
 import { config } from "./config.js";
+import { downloadedAudio, downloadStatus, enqueueDownloads, isDownloading, listDownloaded, removeDownload } from "./downloads.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
+import { isCacheDays, updateSettings } from "./settings.js";
 import { proxyStream, serveFile } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
@@ -128,11 +131,34 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   /** Resolves stream URLs ahead of time so the next track starts instantly. */
   app.post("/api/prepare/:id", async (req) => {
-    const r = await resolveStreams(videoId(req.params));
+    const id = videoId(req.params);
+    if ((req.query as { audio?: string }).audio === "1") {
+      const local = downloadedAudio(id) ?? cachedAudio(id);
+      if (local) return { id, title: local.track.title, duration: local.track.duration, hasSdVideo: false };
+    }
+    const r = await resolveStreams(id);
     return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video };
   });
 
-  app.get("/api/stream/:id/audio", (req, reply) => proxyStream(req, reply, videoId(req.params), "audio"));
+  app.get("/api/stream/:id/audio", async (req, reply) => {
+    const id = videoId(req.params);
+    const played = (req.query as { ahead?: string }).ahead !== "1";
+    try {
+      const download = downloadedAudio(id);
+      const local = download ?? cachedAudio(id, played);
+      if (local) {
+        reply.header("x-earful-source", download ? "download" : "cache");
+        return await serveFile(req, reply, local.file, local.mime);
+      }
+      if (played && !isDownloading(id)) void cacheAudio(id, true).catch((error) => req.log.debug(error));
+    } catch (error) {
+      req.log.debug(error);
+      if (reply.sent) return reply;
+    }
+    if (!played) return reply.code(404).send();
+    reply.header("x-earful-source", "stream");
+    return proxyStream(req, reply, id, "audio");
+  });
 
   app.get("/api/stream/:id/video", async (req, reply) => {
     const id = videoId(req.params);
@@ -141,6 +167,48 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     const resolved = await resolveStreams(id);
     if (!resolved.video) return serveFile(req, reply, await downloadHd(id), "video/mp4");
     return proxyStream(req, reply, id, "video");
+  });
+
+  app.get("/api/cache", () => cacheStats());
+  app.put("/api/cache", (req) => {
+    const { days } = (req.body ?? {}) as { days?: unknown };
+    if (!isCacheDays(days)) throw new HttpError(400, msg("invalidCacheDays"));
+    updateSettings({ cacheDays: days });
+    pruneAudioCache();
+    return cacheStats();
+  });
+  app.delete("/api/cache", () => clearAudioCache());
+  app.post("/api/cache/:id", async (req, reply) => {
+    const id = videoId(req.params);
+    const track = req.body == null ? undefined : library.sanitizeTrack(req.body);
+    if (track && track.id !== id) throw new HttpError(400, msg("idMismatch"));
+    if (!downloadedAudio(id) && !isDownloading(id)) {
+      const { ahead: prefetch, wait } = req.query as { ahead?: string; wait?: string };
+      const ahead = prefetch === "1";
+      const job = cacheAudio(id, !ahead, track);
+      if (ahead || wait === "1") await job;
+      else void job.catch((error) => req.log.debug(error));
+    }
+    return reply.code(204).send();
+  });
+
+  app.get("/api/downloads", () => downloadStatus());
+  app.post("/api/downloads", (req) => {
+    const { tracks } = (req.body ?? {}) as { tracks?: unknown };
+    if (!Array.isArray(tracks)) throw new HttpError(400, msg("tracksRequired"));
+    return enqueueDownloads(tracks.map(library.sanitizeTrack));
+  });
+  app.delete("/api/downloads/:id", async (req, reply) => {
+    await removeDownload(videoId(req.params));
+    return reply.code(204).send();
+  });
+  app.get("/api/offline", () => {
+    const downloads = listDownloaded();
+    const ids = new Set(downloads.map(({ track }) => track.id));
+    return { tracks: [
+      ...downloads.map(({ track }) => ({ ...track, offline: "downloaded" })),
+      ...listCached().filter(({ track }) => !ids.has(track.id)).map(({ track }) => ({ ...track, offline: "cached" })),
+    ] };
   });
 
   // Library
@@ -217,7 +285,21 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   const host = opts.host ?? config.host;
   const preferred = opts.port ?? config.port;
   const port = opts.portFallback ? await freePort(preferred, host) : preferred;
+  const prune = () => {
+    try {
+      pruneAudioCache();
+    } catch (error) {
+      app.log.warn(error);
+    }
+  };
+  let audioPruner: ReturnType<typeof setInterval> | undefined;
+  app.addHook("onClose", () => {
+    clearInterval(audioPruner);
+    flushAudioCache();
+  });
   await app.listen({ port, host });
+  prune();
+  audioPruner = setInterval(prune, 3600_000).unref();
 
   pruneCache().catch(() => {});
   return { port, tools: found, close: () => app.close() };
