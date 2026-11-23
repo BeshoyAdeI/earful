@@ -123,10 +123,18 @@ jobs:
       - name: Check downloads
         shell: bash
         run: |
+          # Without the signing key the APK can't be installed: leave it out of the release instead of failing it.
+          if [ -z "$EARFUL_KEYSTORE" ]; then
+            echo "::warning::No signing key: this release has no Android APK."
+            rm -f release/*.apk
+            echo "### Android: skipped (no signing key)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           { echo "### Android"; ls release | sed 's/^/- /'; } >> "$GITHUB_STEP_SUMMARY"
           found=$(ls release/*-Android.apk 2>/dev/null | wc -l)
           [ "$found" -eq 1 ] || { echo "::error::Expected 1 file(s) matching *-Android.apk, found $found"; ls -l release; exit 1; }
       - uses: actions/upload-artifact@v7
+        if: env.EARFUL_KEYSTORE != ''
         with:
           name: android
           path: release/*
