@@ -76,6 +76,21 @@ export interface DownloadList {
   items: DownloadItem[];
 }
 
+export interface NowPlaying {
+  track: Track;
+  playing: boolean;
+  position: number;
+  duration: number;
+}
+
+export interface DiscordStatus {
+  available: boolean;
+  enabled: boolean;
+  connected: boolean;
+}
+
+export type ExternalFileHandler = (text: string, fileName?: string) => void;
+
 /**
  * The operating system's media controls (notification, lock screen, headphone buttons) when the browser's
  * Media Session can't reach them: the Android app. Absent elsewhere.
@@ -110,6 +125,9 @@ export interface EarfulApi {
   downloads(): Promise<DownloadList>;
   download(tracks: Track[]): Promise<{ queued: number; skipped: number }>;
   removeDownload(id: string): Promise<void>;
+  nowPlaying(playing: NowPlaying | null): Promise<void>;
+  discordStatus(): Promise<DiscordStatus>;
+  setDiscord(enabled: boolean): Promise<DiscordStatus>;
 
   library(): Promise<Library>;
   addFavorite(t: Track): Promise<{ favorites: Track[] }>;

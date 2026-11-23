@@ -2,10 +2,11 @@ import { App } from "@capacitor/app";
 import { Capacitor, registerPlugin, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { installTvMode } from "../tv/tvMode";
 
-/** EarfulDevicePlugin.java: what kind of device this is. */
-const Device = registerPlugin<{ info(): Promise<{ tv: boolean }> }>("EarfulDevice", {
-  web: () => ({ info: async () => ({ tv: false }) }),
-});
+/** Android-specific device information and file sharing. */
+export const Device = registerPlugin<{
+  info(): Promise<{ tv: boolean }>;
+  sharePlaylist(options: { uri: string; title: string }): Promise<void>;
+}>("EarfulDevice");
 
 // How the app fits into Android itself: Android TV, the Back button and the system bars.
 if (Capacitor.isNativePlatform()) {

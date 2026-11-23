@@ -7,10 +7,11 @@ import { ALBUM_ID, album, ARTIST_ID, artist, artistId, GENRE_ID, genre, genreArt
 import { config } from "./config.js";
 import { downloadedAudio, downloadStatus, enqueueDownloads, isDownloading, listDownloaded, removeDownload } from "./downloads.js";
 import { lyricsFor } from "./lyrics.js";
+import { createDiscordPresence } from "./discord.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
-import { isCacheDays, updateSettings } from "./settings.js";
+import { getSettings, isCacheDays, updateSettings } from "./settings.js";
 import { proxyStream, serveFile } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
@@ -48,6 +49,15 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   library.useLibraryStorage(fileStorage());
   const found = await refreshTools();
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "warn" } });
+  // The music server can still start if settings.json is temporarily unreadable.
+  let discordEnabled = true;
+  try {
+    discordEnabled = getSettings().discord;
+  } catch {
+    // Keep the default in memory until settings can be read again.
+  }
+  const discord = createDiscordPresence(discordEnabled);
+  app.addHook("onClose", () => discord.close());
 
   app.setErrorHandler((err, req, reply) => {
     const e = err as Error & { statusCode?: number };
@@ -148,6 +158,32 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   });
 
   // Playback
+
+  app.get("/api/discord", () => discord.status());
+
+  app.put("/api/discord", async (req) => {
+    const { enabled } = (req.body ?? {}) as { enabled?: unknown };
+    if (typeof enabled !== "boolean") throw new HttpError(400, msg("discordSetting"));
+    try {
+      updateSettings({ discord: enabled });
+    } catch {
+      throw new HttpError(500, msg("discordSettingsFailed"));
+    }
+    return discord.setEnabled(enabled);
+  });
+
+  app.post("/api/now-playing", async (req, reply) => {
+    if (req.body === null) {
+      discord.setNowPlaying(null);
+    } else {
+      const body = (req.body ?? {}) as { track?: unknown; playing?: unknown; position?: unknown; duration?: unknown };
+      const seconds = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(value, 1e9)) : 0;
+      const duration = seconds(body.duration);
+      const position = Math.min(seconds(body.position), duration || Infinity);
+      discord.setNowPlaying({ track: library.sanitizeTrack(body.track), playing: body.playing === true, position, duration }, langOf(req));
+    }
+    return reply.code(204).send();
+  });
 
   /** Resolves stream URLs ahead of time so the next track starts instantly. */
   app.post("/api/prepare/:id", async (req) => {
@@ -263,9 +299,9 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   app.post("/api/history", async (req) => ({ history: await library.pushHistory(library.sanitizeTrack(req.body)) }));
 
-  app.post("/api/playlists", async (req) => {
+  app.post("/api/playlists", { bodyLimit: 5 * 1024 * 1024 }, async (req) => {
     const body = (req.body ?? {}) as { name?: unknown; tracks?: unknown };
-    const tracks = Array.isArray(body.tracks) ? body.tracks.slice(0, 500).map(library.sanitizeTrack) : [];
+    const tracks = Array.isArray(body.tracks) ? body.tracks.slice(0, 5000).map(library.sanitizeTrack) : [];
     return library.createPlaylist(typeof body.name === "string" ? body.name : "", tracks);
   });
 

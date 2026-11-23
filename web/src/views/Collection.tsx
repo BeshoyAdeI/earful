@@ -1,4 +1,4 @@
-import { DotsThreeIcon, MagnifyingGlassIcon, PauseIcon, PencilSimpleIcon, PlayIcon, ShuffleIcon, TrashIcon } from "@phosphor-icons/react";
+import { DotsThreeIcon, ExportIcon, MagnifyingGlassIcon, PauseIcon, PencilSimpleIcon, PlayIcon, ShuffleIcon, TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
@@ -10,6 +10,7 @@ import { EmptyState, PageHeader } from "../components/Page";
 import { TrackList } from "../components/TrackList";
 import { useT } from "../i18n";
 import { shuffled } from "../lib/format";
+import { sharePlaylistFile } from "../lib/openPlaylistFile";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { usePlayer } from "../player/player";
@@ -115,7 +116,7 @@ export default function Collection({ kind }: Props) {
           <ShuffleIcon size={24} />
         </IconButton>
         {(kind === "playlist" || kind === "favorites") && <DownloadAllButton tracks={tracks} />}
-        {kind === "playlist" && (
+        {(kind === "playlist" || kind === "favorites") && (
           <IconButton label={t.collection.more} size="lg" onClick={() => setMoreOpen(true)}>
             <DotsThreeIcon size={26} weight="bold" />
           </IconButton>
@@ -147,33 +148,49 @@ export default function Collection({ kind }: Props) {
         )}
       </div>
 
+      {kind !== "history" && (
+        <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title={name}>
+          <div className="flex flex-col">
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                void sharePlaylistFile(name, tracks);
+              }}
+              className="flex items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-surface-3"
+            >
+              <ExportIcon size={18} className="text-fg-2" /> {t.playlistFile.share}
+            </button>
+            {playlist && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setRenaming(true);
+                  }}
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-surface-3"
+                >
+                  <PencilSimpleIcon size={18} className="text-fg-2" /> {t.collection.rename}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setConfirmDelete(true);
+                  }}
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-danger hover:bg-surface-3"
+                >
+                  <TrashIcon size={18} /> {t.collection.deletePlaylist}
+                </button>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
+
       {playlist && (
         <>
-          <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title={playlist.name}>
-            <div className="flex flex-col">
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false);
-                  setRenaming(true);
-                }}
-                className="flex items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-surface-3"
-              >
-                <PencilSimpleIcon size={18} className="text-fg-2" /> {t.collection.rename}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false);
-                  setConfirmDelete(true);
-                }}
-                className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-danger hover:bg-surface-3"
-              >
-                <TrashIcon size={18} /> {t.collection.deletePlaylist}
-              </button>
-            </div>
-          </Modal>
-
           <NamePlaylistDialog
             open={renaming}
             initial={playlist.name}

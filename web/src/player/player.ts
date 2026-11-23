@@ -280,6 +280,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       load(get().index + 1);
     } catch {
       set({ status: "paused", statusText: null, position: 0 });
+      scheduleNowPlaying(true);
     }
   }
 
@@ -311,6 +312,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     if (next >= 0) return load(next);
     if (s.autoRadio) return void continueWithRadio();
     set({ status: "paused", position: 0 });
+    scheduleNowPlaying(true);
   }
 
   /** Shows why a track can't play, then moves on (unless every track would fail the same way). */
@@ -390,7 +392,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (!isActive() || !media.buffered.length) return;
       set({ buffered: media.buffered.end(media.buffered.length - 1) });
     });
-    media.addEventListener("seeked", () => isActive() && syncPositionState());
+    media.addEventListener("seeked", () => {
+      if (!isActive()) return;
+      syncPositionState();
+      if (reportsPlayback) scheduleNowPlaying();
+    });
     media.addEventListener("ended", () => isActive() && onEnded());
     media.addEventListener("error", () => isActive() && media.getAttribute("src") && onError(media));
   }
@@ -548,6 +554,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     seek: (seconds) => {
       const t = Math.max(0, Math.min(seconds, get().duration || seconds));
       set({ position: t });
+      if (reportsPlayback) scheduleNowPlaying();
       const media = activeMedia();
       const track = get().queue[get().index];
       if (!media || !track || loaded?.id !== track.id || media.readyState === 0) {
@@ -613,6 +620,33 @@ audio.muted = videoEl.muted = usePlayer.getState().muted;
 export const selectCurrent = (s: PlayerState): Track | null => s.queue[s.index] ?? null;
 
 /** Whether the track can be shown as video (art tracks are audio with a still image). */
+
+let nowPlayingTimer: ReturnType<typeof setTimeout> | undefined;
+let reportsPlayback = false;
+
+function scheduleNowPlaying(clear = false) {
+  clearTimeout(nowPlayingTimer);
+  nowPlayingTimer = setTimeout(() => {
+    const { queue, index, status, position, duration } = usePlayer.getState();
+    const track = queue[index];
+    const stopped = clear || !track || status === "idle" || status === "error";
+    reportsPlayback = !stopped;
+    void api.nowPlaying(stopped ? null : { track, position, duration, playing: status !== "paused" }).catch(() => {});
+  }, 1000);
+}
+
+usePlayer.subscribe((state, previous) => {
+  const changed = state.queue[state.index] !== previous.queue[previous.index];
+  if (changed || state.status !== previous.status) scheduleNowPlaying();
+});
+
+window.addEventListener("pagehide", () => {
+  clearTimeout(nowPlayingTimer);
+  if (reportsPlayback) void api.nowPlaying(null).catch(() => {});
+});
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted && reportsPlayback) scheduleNowPlaying();
+});
 
 // Persistence: resume the same queue and position after a reload.
 

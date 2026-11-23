@@ -1,4 +1,4 @@
-export type { LyricLine, Lyrics } from "../../../server/src/lyrics";
+export type { LyricLine, Lyrics } from "../../../server/src/lyrics.js";
 
 export interface Track {
   id: string;

@@ -5,6 +5,7 @@ interface DesktopBridge {
   /** Missing in desktop builds older than 1.2. */
   setLanguage?: (lang: string) => void;
   openPath?: (path: string) => Promise<boolean>;
+  onOpenPlaylist?: (handler: (file: { text?: string; fileName: string; error?: "tooLarge" | "readFailed" }) => void) => () => void;
 }
 
 export const desktop = (window as Window & { earfulDesktop?: DesktopBridge }).earfulDesktop;

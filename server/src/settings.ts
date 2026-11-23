@@ -4,8 +4,10 @@ import { config } from "./config.js";
 
 export const cacheDaysOptions = [1, 3, 7, 14, 30, 90, 0] as const;
 export type CacheDays = (typeof cacheDaysOptions)[number];
-interface Settings {
+export interface ServerSettings {
   cacheDays: CacheDays;
+  /** Show what's playing on Discord (server/src/discord.ts). */
+  discord: boolean;
   [key: string]: unknown;
 }
 
@@ -31,12 +33,16 @@ export function isCacheDays(value: unknown): value is CacheDays {
   return cacheDaysOptions.some((days) => days === value);
 }
 
-export function getSettings(): Settings {
-  const stored = readJson<Partial<Settings>>(file, {});
-  return { ...stored, cacheDays: isCacheDays(stored.cacheDays) ? stored.cacheDays : 7 };
+export function getSettings(): ServerSettings {
+  const stored = readJson<Partial<ServerSettings>>(file, {});
+  return {
+    ...stored,
+    cacheDays: isCacheDays(stored.cacheDays) ? stored.cacheDays : 7,
+    discord: typeof stored.discord === "boolean" ? stored.discord : true,
+  };
 }
 
-export function updateSettings(patch: Partial<Settings>): Settings {
+export function updateSettings(patch: Partial<ServerSettings>): ServerSettings {
   const settings = { ...getSettings(), ...patch };
   writeJson(file, settings);
   return settings;

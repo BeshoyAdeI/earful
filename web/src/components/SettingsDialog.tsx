@@ -9,10 +9,10 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LANGUAGES, useI18n, useT, type Lang } from "../i18n";
-import { capabilities, type Channel } from "../lib/api";
+import { api, capabilities, type Channel, type DiscordStatus } from "../lib/api";
 import { cn } from "../lib/format";
 import { useSystem } from "../stores/system";
-import { useUi } from "../stores/ui";
+import { toast, useUi } from "../stores/ui";
 import { BackupSection } from "./BackupSection";
 import { OfflineSection } from "./OfflineSection";
 import { SpotifyImport } from "./SpotifyImport";
@@ -83,6 +83,8 @@ export function SettingsDialog() {
   const setTheme = useUi((s) => s.setTheme);
   const { info, status, load, update } = useSystem();
   const [channel, setChannel] = useState<Channel>("stable");
+  const [discord, setDiscordStatus] = useState<DiscordStatus>();
+  const [savingDiscord, setSavingDiscord] = useState(false);
   const logBox = useRef<HTMLPreElement>(null);
   const t = useT();
   const lang = useI18n((s) => s.lang);
@@ -91,6 +93,33 @@ export function SettingsDialog() {
   useEffect(() => {
     if (open) void load();
   }, [open, load]);
+
+  useEffect(() => {
+    if (!open || savingDiscord || discord?.available === false) return;
+    let active = true;
+    const refresh = () => {
+      void api.discordStatus().then((status) => {
+        if (active) setDiscordStatus(status);
+      }).catch(() => {});
+    };
+    refresh();
+    const interval = setInterval(refresh, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [open, savingDiscord, discord?.available]);
+
+  const toggleDiscord = async (enabled: boolean) => {
+    setSavingDiscord(true);
+    try {
+      setDiscordStatus(await api.setDiscord(enabled));
+    } catch {
+      toast(t.discord.saveFailed, "error");
+    } finally {
+      setSavingDiscord(false);
+    }
+  };
 
   useEffect(() => {
     if (info) setChannel(info.ytdlp.channel);
@@ -141,6 +170,29 @@ export function SettingsDialog() {
           />
           <AccentPicker />
         </section>
+
+        {discord?.available && (
+          <section className="flex flex-col gap-2">
+            <h3 className="text-xs font-medium text-fg-3">{t.discord.title}</h3>
+            <div className="space-y-1 rounded-xl bg-surface-1 p-3 ring-1 ring-line">
+              <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                {t.discord.toggle}
+                <input
+                  type="checkbox"
+                  role="switch"
+                  className="size-4 shrink-0 accent-accent"
+                  checked={discord.enabled}
+                  disabled={savingDiscord}
+                  onChange={(event) => void toggleDiscord(event.currentTarget.checked)}
+                />
+              </label>
+              {discord.enabled && (
+                <p className="text-xs text-accent-text">{discord.connected ? t.discord.connected : t.discord.waiting}</p>
+              )}
+              <p className="text-xs text-fg-2">{t.discord.note}</p>
+            </div>
+          </section>
+        )}
 
         <section className="flex flex-col gap-2">
           <h3 className="flex items-center gap-1.5 text-xs font-medium text-fg-3">
