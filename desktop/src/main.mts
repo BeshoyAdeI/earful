@@ -142,8 +142,15 @@ function createMainWindow(url: string): BrowserWindow {
     if (state.maximized) win.maximize();
     win.show();
   });
-  // Windows forgets thumbnail buttons when a window is hidden and shown again.
-  win.on("show", () => showThumbar(win));
+  // The taskbar buttons can only be set once Windows has made the window's taskbar button, a moment after it
+  // first shows; they're set again whenever the window is shown, since Windows can drop them while it's hidden.
+  win.on("show", () => {
+    thumbarReady = false;
+    setTimeout(() => {
+      thumbarReady = true;
+      showThumbar(win);
+    }, 1500);
+  });
   win.on("close", () => saveWindowState(win));
 
   // Links to YouTube etc. open in the user's browser, never inside the app.
@@ -266,11 +273,13 @@ async function launch() {
 
 // What's playing, from the web app: the taskbar buttons follow it (the window title follows the page's title).
 let media: MediaState = { playing: false, hasTrack: false };
+let thumbarReady = false;
 const THUMBAR_LABELS = {
   en: { prev: "Previous", play: "Play", pause: "Pause", next: "Next" },
   "pt-BR": { prev: "Anterior", play: "Tocar", pause: "Pausar", next: "Próxima" },
 };
 function showThumbar(win: BrowserWindow) {
+  if (!thumbarReady || win.isDestroyed() || !win.isVisible()) return;
   const labels = THUMBAR_LABELS[lang as keyof typeof THUMBAR_LABELS] ?? THUMBAR_LABELS.en;
   setThumbar(win, media, labels, (command) => {
     if (!win.isDestroyed()) win.webContents.send("earful:media-command", command);

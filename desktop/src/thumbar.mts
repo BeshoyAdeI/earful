@@ -60,17 +60,18 @@ export interface ThumbarLabels {
   next: string;
 }
 
-/** Shows the buttons for `state` on `win`; `send` passes a click back to the page. */
+/**
+ * Shows the buttons for `state` on `win`; `send` passes a click back to the page. Windows only lets the buttons be
+ * added once, so the same three are always set and hidden while nothing is loaded (an empty list first would lock
+ * the toolbar at no buttons).
+ */
 export function setThumbar(win: BrowserWindow, state: MediaState, labels: ThumbarLabels, send: (command: "prev" | "toggle" | "next") => void) {
   if (process.platform !== "win32" || win.isDestroyed()) return;
-  if (!state.hasTrack) {
-    win.setThumbarButtons([]);
-    return;
-  }
   const i = getIcons();
+  const flags: ("hidden" | "enabled")[] = state.hasTrack ? ["enabled"] : ["hidden"];
   win.setThumbarButtons([
-    { tooltip: labels.prev, icon: i.prev, click: () => send("prev") },
-    { tooltip: state.playing ? labels.pause : labels.play, icon: state.playing ? i.pause : i.play, click: () => send("toggle") },
-    { tooltip: labels.next, icon: i.next, click: () => send("next") },
+    { tooltip: labels.prev, icon: i.prev, flags, click: () => send("prev") },
+    { tooltip: state.playing ? labels.pause : labels.play, icon: state.playing ? i.pause : i.play, flags, click: () => send("toggle") },
+    { tooltip: labels.next, icon: i.next, flags, click: () => send("next") },
   ]);
 }
