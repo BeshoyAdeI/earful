@@ -35,17 +35,19 @@ export interface ThumbarLabels {
 
 /**
  * Shows the buttons for `state` on `win`; `send` passes a click back to the page. Windows only lets the buttons be
- * added once, so the same three are always set and hidden while nothing is loaded (an empty list first would lock
+ * added once, so the same four are always set and hidden while nothing is loaded (an empty list first would lock
  * the toolbar at no buttons).
  */
 export function setThumbar(win: BrowserWindow, state: MediaState, labels: ThumbarLabels, send: (command: "prev" | "toggle" | "next") => void): boolean {
   if (process.platform !== "win32" || win.isDestroyed()) return false;
   const i = getIcons();
-  // No flag at all for a shown button: Windows refuses the whole set when "enabled" is passed.
-  const flags: "hidden"[] = state.hasTrack ? [] : ["hidden"];
+  // No flag at all for a shown button: Windows refuses the whole set when "enabled" is passed. Windows also keeps
+  // the first icon a button gets, so Play and Pause are separate buttons and only one of them is shown.
+  const shown = (visible: boolean): "hidden"[] => (state.hasTrack && visible ? [] : ["hidden"]);
   return win.setThumbarButtons([
-    { tooltip: labels.prev, icon: i.prev, flags, click: () => send("prev") },
-    { tooltip: state.playing ? labels.pause : labels.play, icon: state.playing ? i.pause : i.play, flags, click: () => send("toggle") },
-    { tooltip: labels.next, icon: i.next, flags, click: () => send("next") },
+    { tooltip: labels.prev, icon: i.prev, flags: shown(true), click: () => send("prev") },
+    { tooltip: labels.play, icon: i.play, flags: shown(!state.playing), click: () => send("toggle") },
+    { tooltip: labels.pause, icon: i.pause, flags: shown(state.playing), click: () => send("toggle") },
+    { tooltip: labels.next, icon: i.next, flags: shown(true), click: () => send("next") },
   ]);
 }
