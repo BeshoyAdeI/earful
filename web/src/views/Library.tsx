@@ -1,3 +1,4 @@
+import { playlistMenuAt } from "../components/PlaylistMenu";
 import { DatabaseIcon, FolderOpenIcon, PlusIcon } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -15,11 +16,26 @@ import { useDownloads } from "../stores/downloads";
 import { useUi } from "../stores/ui";
 import { byRecentPlay, usePlaylistPlays } from "../stores/playlistPlays";
 
-function Entry({ to, name, kind, tracks, sub }: { to: string; name: string; kind: CoverKind; tracks: Track[]; sub?: string }) {
+function Entry({
+  to,
+  name,
+  kind,
+  tracks,
+  sub,
+  playlistId,
+}: {
+  to: string;
+  name: string;
+  kind: CoverKind;
+  tracks: Track[];
+  sub?: string;
+  playlistId?: string;
+}) {
   return (
     <li>
       <Link
         to={to}
+        onContextMenu={playlistId ? playlistMenuAt(playlistId) : undefined}
         className="group flex items-center gap-3 rounded-[16px] p-2 transition-colors hover:bg-surface-2 md:flex-col md:items-stretch md:gap-3 md:p-3"
       >
         <Cover
@@ -94,6 +110,7 @@ export default function Library() {
             to={paths.playlist(p.id)}
             name={p.name}
             kind="playlist"
+            playlistId={p.id}
             tracks={p.tracks}
             sub={t.library.playlistSub(p.tracks.length)}
           />

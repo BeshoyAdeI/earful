@@ -1,3 +1,4 @@
+import { playlistMenuAt } from "./PlaylistMenu";
 import {
   BooksIcon,
   ClockCounterClockwiseIcon,
@@ -8,7 +9,7 @@ import {
   MagnifyingGlassIcon,
   PlusIcon,
 } from "@phosphor-icons/react";
-import { useState, type ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router";
 import { useT } from "../i18n";
 import { cn } from "../lib/format";
@@ -61,11 +62,26 @@ function SettingsButton() {
 }
 
 /** Shared tile: square icon/art with an active Volt ring. Labels appear on the expanded rail (≥1280px). */
-function RailLink({ to, label, sub, end, children }: { to: string; label: string; sub?: string; end?: boolean; children: ReactNode }) {
+function RailLink({
+  to,
+  label,
+  sub,
+  end,
+  onContextMenu,
+  children,
+}: {
+  to: string;
+  label: string;
+  sub?: string;
+  end?: boolean;
+  onContextMenu?: (e: MouseEvent) => void;
+  children: ReactNode;
+}) {
   return (
     <NavLink
       to={to}
       end={end}
+      onContextMenu={onContextMenu}
       title={label}
       className={({ isActive }) =>
         cn(
@@ -174,7 +190,7 @@ export function Rail() {
             </span>
           </RailLink>
           {sidebarPlaylists && playlists.map((p) => (
-            <RailLink key={p.id} to={paths.playlist(p.id)} label={p.name} sub={t.common.tracks(p.tracks.length)}>
+            <RailLink key={p.id} to={paths.playlist(p.id)} label={p.name} sub={t.common.tracks(p.tracks.length)} onContextMenu={playlistMenuAt(p.id)}>
               <Artwork src={p.tracks[0]?.thumb} className="size-full" iconSize={18} />
             </RailLink>
           ))}

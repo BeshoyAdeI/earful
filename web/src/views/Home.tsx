@@ -1,3 +1,4 @@
+import { playlistMenuAt } from "../components/PlaylistMenu";
 import { ClockCounterClockwiseIcon, DownloadSimpleIcon, HeartIcon, MagnifyingGlassIcon, PlayIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
@@ -14,11 +15,26 @@ import { useAppearance } from "../stores/appearance";
 import { useLibrary } from "../stores/library";
 import { useDownloads } from "../stores/downloads";
 
-function Shortcut({ to, label, tracks, cover }: { to: string; label: string; tracks: Track[]; cover: ReactNode }) {
+function Shortcut({
+  to,
+  label,
+  tracks,
+  cover,
+  playlistId,
+}: {
+  to: string;
+  label: string;
+  tracks: Track[];
+  cover: ReactNode;
+  playlistId?: string;
+}) {
   const playList = usePlayer((s) => s.playList);
   const t = useT();
   return (
-    <div className="group relative flex h-14 items-center gap-3 overflow-hidden rounded-[12px] bg-surface-2 pr-2 transition-colors hover:bg-surface-3 md:h-16">
+    <div
+      onContextMenu={playlistId ? playlistMenuAt(playlistId) : undefined}
+      className="group relative flex h-14 items-center gap-3 overflow-hidden rounded-[12px] bg-surface-2 pr-2 transition-colors hover:bg-surface-3 md:h-16"
+    >
       <Link to={to} className="absolute inset-0" aria-label={label} />
       <span className="pointer-events-none size-14 shrink-0 overflow-hidden md:size-16">{cover}</span>
       <span className="pointer-events-none min-w-0 flex-1 truncate text-[13px] font-semibold md:text-sm">{label}</span>
@@ -131,6 +147,7 @@ export default function Home() {
                 key={p.id}
                 to={paths.playlist(p.id)}
                 label={p.name}
+                playlistId={p.id}
                 tracks={p.tracks}
                 cover={<Artwork src={p.tracks[0]?.thumb} className="size-full" />}
               />

@@ -34,6 +34,8 @@ interface UiState {
   panelTab: PanelTab;
   toasts: Toast[];
   menu: TrackMenuState | null;
+  /** A playlist's right-click menu (components/PlaylistMenu.tsx), at the pointer. */
+  playlistMenu: { id: string; x: number; y: number } | null;
   /** Tracks waiting for the "add to playlist" dialog: one from a track menu, many from the list search. */
   addToPlaylist: Track[] | null;
   shortcutsOpen: boolean;
@@ -53,6 +55,8 @@ interface UiState {
   dismissToast: (id: number) => void;
   openMenu: (m: TrackMenuState) => void;
   closeMenu: () => void;
+  openPlaylistMenu: (m: { id: string; x: number; y: number }) => void;
+  closePlaylistMenu: () => void;
   openAddToPlaylist: (tracks: Track[] | null) => void;
   setShortcutsOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -135,6 +139,9 @@ export const useUi = create<UiState>((set, get) => ({
 
   openMenu: (menu) => set({ menu }),
   closeMenu: () => set({ menu: null }),
+  playlistMenu: null,
+  openPlaylistMenu: (playlistMenu) => set({ playlistMenu, menu: null }),
+  closePlaylistMenu: () => set({ playlistMenu: null }),
   openAddToPlaylist: (addToPlaylist) => set({ addToPlaylist, menu: null }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),

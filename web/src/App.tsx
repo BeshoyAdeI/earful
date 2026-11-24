@@ -13,6 +13,7 @@ import { desktop } from "./lib/desktop";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { LyricsStage } from "./components/LyricsStage";
 import { Toasts } from "./components/Toasts";
+import { PlaylistMenu } from "./components/PlaylistMenu";
 import { TrackMenu } from "./components/TrackMenu";
 import { FloatingVideo, Theater } from "./components/Video";
 import { MD, useMediaQuery } from "./hooks/useMediaQuery";
@@ -211,6 +212,7 @@ export default function App() {
       <FloatingVideo />
       <Theater />
       <TrackMenu />
+      <PlaylistMenu />
       <AddToPlaylistDialog />
       <PlaylistFileDialog />
       <ShortcutsDialog />
