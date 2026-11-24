@@ -19,6 +19,13 @@ contextBridge.exposeInMainWorld("earfulDesktop", {
       return () => ipcRenderer.removeListener("earful:update-state", listener);
     },
   },
+  /** What's playing, for the Windows taskbar buttons. */
+  setMedia: (state: { playing: boolean; hasTrack: boolean }) => ipcRenderer.send("earful:media", state),
+  onMediaCommand: (handler: (command: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, command: string) => handler(command);
+    ipcRenderer.on("earful:media-command", listener);
+    return () => ipcRenderer.removeListener("earful:media-command", listener);
+  },
   onOpenPlaylist: (handler: (file: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, file: unknown) => handler(file);
     ipcRenderer.on("earful:open-playlist", listener);

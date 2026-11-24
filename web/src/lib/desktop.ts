@@ -33,6 +33,9 @@ interface DesktopBridge {
   openPath?: (path: string) => Promise<boolean>;
   /** Missing in desktop builds older than 1.6.1. */
   update?: UpdateBridge;
+  /** Missing in desktop builds older than 1.6.7. */
+  setMedia?: (state: { playing: boolean; hasTrack: boolean }) => void;
+  onMediaCommand?: (handler: (command: string) => void) => () => void;
   onOpenPlaylist?: (handler: (file: { text?: string; fileName: string; error?: "tooLarge" | "readFailed" }) => void) => () => void;
 }
 

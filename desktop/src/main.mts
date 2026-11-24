@@ -6,6 +6,7 @@ import { app, BrowserWindow, ipcMain, Menu, screen, shell } from "electron";
 import type { RunningServer } from "../../server/src/app.js";
 import { isPlaylistFileName, MAX_PLAYLIST_FILE_BYTES } from "../../web/src/lib/playlistFile.js";
 import { backupLibraryOnUpdate } from "./backup.js";
+import { setThumbar, type MediaState } from "./thumbar.mjs";
 import { setupUpdater } from "./updater.mjs";
 
 // No top-level await in this file: Electron only fires "ready" after the entry module finishes
@@ -141,6 +142,8 @@ function createMainWindow(url: string): BrowserWindow {
     if (state.maximized) win.maximize();
     win.show();
   });
+  // Windows forgets thumbnail buttons when a window is hidden and shown again.
+  win.on("show", () => showThumbar(win));
   win.on("close", () => saveWindowState(win));
 
   // Links to YouTube etc. open in the user's browser, never inside the app.
@@ -260,6 +263,27 @@ async function launch() {
   });
   mainWindow.once("ready-to-show", () => splash.destroy());
 }
+
+// What's playing, from the web app: the taskbar buttons follow it (the window title follows the page's title).
+let media: MediaState = { playing: false, hasTrack: false };
+const THUMBAR_LABELS = {
+  en: { prev: "Previous", play: "Play", pause: "Pause", next: "Next" },
+  "pt-BR": { prev: "Anterior", play: "Tocar", pause: "Pausar", next: "Próxima" },
+};
+function showThumbar(win: BrowserWindow) {
+  const labels = THUMBAR_LABELS[lang as keyof typeof THUMBAR_LABELS] ?? THUMBAR_LABELS.en;
+  setThumbar(win, media, labels, (command) => {
+    if (!win.isDestroyed()) win.webContents.send("earful:media-command", command);
+  });
+}
+ipcMain.on("earful:media", (event, next: unknown) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || typeof next !== "object" || !next) return;
+  const { playing, hasTrack } = next as Partial<MediaState>;
+  const changed = !!playing !== media.playing || !!hasTrack !== media.hasTrack;
+  media = { playing: !!playing, hasTrack: !!hasTrack };
+  if (changed) showThumbar(win);
+});
 
 ipcMain.on("earful:theme", (event, theme: "dark" | "light") => {
   const win = BrowserWindow.fromWebContents(event.sender);
