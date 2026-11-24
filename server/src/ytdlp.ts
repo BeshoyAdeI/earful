@@ -210,6 +210,25 @@ export function invalidate(id: string) {
   resolvedAt.delete(id);
 }
 
+/**
+ * The audio asked straight from YouTube (directAudio.ts), skipping yt-dlp: for when YouTube refuses yt-dlp's stream
+ * even after resolving it again. Keeps yt-dlp's video, if any. Throws when YouTube has no audio this way either.
+ */
+export async function resolveAudioDirect(id: string): Promise<Resolved> {
+  const direct = await directAudio(id, await clientsForDirect());
+  const before = resolvedAt.get(id);
+  const resolved: Resolved = {
+    id,
+    title: direct.title || before?.title || "",
+    duration: direct.duration || before?.duration || 0,
+    audio: { formatId: "direct", url: direct.url, headers: {}, mime: direct.mime },
+    video: before?.video,
+    expiresAt: direct.expiresAt - 10 * 60_000,
+  };
+  resolvedAt.set(id, resolved);
+  return resolved;
+}
+
 const downloads = new Map<string, Promise<string>>();
 
 /** Keeps the video cache under `config.cacheMaxBytes`, evicting least recently played files first. */

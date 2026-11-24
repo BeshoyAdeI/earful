@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { msg } from "./i18n.js";
 import { HttpError } from "./types.js";
-import { invalidate, resolveStreams, type StreamFormat } from "./ytdlp.js";
+import { invalidate, resolveAudioDirect, resolveStreams, type StreamFormat } from "./ytdlp.js";
 
 const PASS_HEADERS = ["content-length", "content-range", "accept-ranges", "last-modified"];
 
@@ -39,6 +39,15 @@ export async function proxyStream(req: FastifyRequest, reply: FastifyReply, id: 
     await upstream.body?.cancel();
     fmt = await pick(true);
     upstream = await request(fmt);
+  }
+  // Still refused (YouTube blocking yt-dlp's stream): ask YouTube for the audio directly before giving up.
+  if (kind === "audio" && (upstream.status === 403 || upstream.status === 410) && fmt.formatId !== "direct") {
+    const direct = await resolveAudioDirect(id).catch(() => null);
+    if (direct) {
+      await upstream.body?.cancel();
+      fmt = direct.audio;
+      upstream = await request(fmt);
+    }
   }
   if (!upstream.ok || !upstream.body) {
     throw new HttpError(502, msg("streamRefused", { status: upstream.status }), "maybe_outdated");
