@@ -20,6 +20,8 @@ export interface TrackMenuState {
   x: number;
   y: number;
   playlistId?: string;
+  /** Opened from the queue: the track's place in it, so the menu moves or removes it instead of adding a copy. */
+  queueIndex?: number;
 }
 
 type Theme = "dark" | "light";

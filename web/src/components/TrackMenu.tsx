@@ -77,17 +77,44 @@ export function TrackMenu() {
     close();
   };
 
+  const inQueue = menu?.queueIndex;
+  const playingIndex = usePlayer((s) => s.index);
+
   const content = menu && (
     <div role="menu" aria-label={t.trackMenu.actionsFor(menu.track.title)} data-escape-closes className="flex flex-col">
-      <Item icon={<PlayIcon size={18} />} onClick={run(() => usePlayer.getState().playTrack(menu.track))}>
-        {t.trackMenu.playNow}
-      </Item>
-      <Item icon={<QueueIcon size={18} />} onClick={run(() => usePlayer.getState().playNext(menu.track))}>
-        {t.trackMenu.playNext}
-      </Item>
-      <Item icon={<ListPlusIcon size={18} />} onClick={run(() => usePlayer.getState().addToQueue(menu.track))}>
-        {t.trackMenu.addToQueue}
-      </Item>
+      {inQueue === undefined ? (
+        <>
+          <Item icon={<PlayIcon size={18} />} onClick={run(() => usePlayer.getState().playTrack(menu.track))}>
+            {t.trackMenu.playNow}
+          </Item>
+          <Item icon={<QueueIcon size={18} />} onClick={run(() => usePlayer.getState().playNext(menu.track))}>
+            {t.trackMenu.playNext}
+          </Item>
+          <Item icon={<ListPlusIcon size={18} />} onClick={run(() => usePlayer.getState().addToQueue(menu.track))}>
+            {t.trackMenu.addToQueue}
+          </Item>
+        </>
+      ) : (
+        // In the queue: play it from where it is, or move it up next (no copies).
+        inQueue !== playingIndex && (
+          <>
+            <Item icon={<PlayIcon size={18} />} onClick={run(() => usePlayer.getState().jumpTo(inQueue))}>
+              {t.trackMenu.playNow}
+            </Item>
+            {inQueue !== playingIndex + 1 && (
+              <Item
+                icon={<QueueIcon size={18} />}
+                onClick={run(() => {
+                  const { moveTo, index } = usePlayer.getState();
+                  moveTo(inQueue, inQueue < index ? index : index + 1);
+                })}
+              >
+                {t.trackMenu.playNext}
+              </Item>
+            )}
+          </>
+        )
+      )}
       <Item icon={<RadioIcon size={18} />} onClick={run(() => void usePlayer.getState().startRadio(menu.track))}>
         {t.trackMenu.startRadio}
       </Item>
@@ -110,6 +137,11 @@ export function TrackMenu() {
       >
         {downloaded ? t.offline.remove : t.offline.download}
       </Item>
+      {inQueue !== undefined && inQueue !== playingIndex && (
+        <Item danger icon={<TrashIcon size={18} />} onClick={run(() => usePlayer.getState().removeAt(inQueue))}>
+          {t.queue.remove}
+        </Item>
+      )}
       {menu.playlistId && (
         <Item
           danger
