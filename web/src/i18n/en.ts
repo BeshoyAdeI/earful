@@ -545,11 +545,18 @@ export const en = {
     unpair: "Disconnect",
     synced: "Synced with your PC",
     secure: "Encrypted with the pairing code, so it's safe on public Wi-Fi too.",
+    scan: "Scan the PC's QR code",
+    scanHint: "Point the camera at the QR code in Earful's Settings on your PC.",
+    orType: "Or type the address and code it shows:",
+    cameraDenied: "Earful can't use the camera. Allow it in Android Settings → Apps → Earful → Permissions, or type the address and code instead.",
+    qrLabel: "Pairing QR code",
+    qrHint: "Scan this with Earful on your phone, or type the address and code.",
     errors: {
       unreachable: "Can't reach the PC. Is it on the same Wi-Fi, with Earful open and sync turned on?",
       wrongCode: "The code doesn't match the one on the PC.",
       badAddress: "Enter the address as the PC shows it, like 192.168.1.5:4281.",
       badCode: "The code has 16 letters and numbers, like ABCD-EFGH-JKMN-PQRS.",
+      notPairingCode: "That QR code isn't an Earful pairing code. Scan the one in the PC's Settings.",
     },
   },
 

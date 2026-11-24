@@ -37,7 +37,7 @@ import { forgetUrl, resolveAudio } from "./streams";
 // phone instead of behind HTTP. The build swaps lib/api.ts for this module (see vite.config.ts).
 export * from "../lib/apiTypes";
 export { onExternalFile } from "./playlistFiles";
-import { onSyncChange, pair, syncNow, syncStatus, unpair } from "./sync";
+import { onSyncChange, pair, pairFromQr, syncNow, syncStatus, unpair } from "./sync";
 
 library.useLibraryStorage(nativeStorage);
 usePlaysStorage(nativePlaysStorage);
@@ -134,7 +134,7 @@ export const api: EarfulApi = {
   stats: (range, signal) => call(async () => computeStats(await allPlays(), range), signal),
   clearPlays: () => call(clearPlays),
   allPlays: () => call(allPlays),
-  syncClient: { status: syncStatus, subscribe: onSyncChange, pair, syncNow: () => syncNow(true), unpair },
+  syncClient: { status: syncStatus, subscribe: onSyncChange, pair, pairFromQr, syncNow: () => syncNow(true), unpair },
   imageSrc: async (src) => {
     const url = coverUrl(src);
     if (!url) throw fail(400, "invalidCover");

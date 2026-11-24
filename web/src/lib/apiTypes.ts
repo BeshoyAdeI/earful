@@ -30,7 +30,7 @@ export interface SyncClientStatus {
   host?: string;
   lastSyncAt?: number;
   syncing: boolean;
-  error?: "unreachable" | "wrongCode" | "badAddress" | "badCode";
+  error?: "unreachable" | "wrongCode" | "badAddress" | "badCode" | "notPairingCode";
 }
 
 export interface ImportResult {
@@ -168,6 +168,8 @@ export interface EarfulApi {
     subscribe(listener: () => void): () => void;
     /** Throws an Error whose message is a SyncClientStatus error. */
     pair(address: string, code: string): Promise<SyncClientStatus>;
+    /** Pairs from the text of a scanned QR code (the PC's pairing code). */
+    pairFromQr(text: string): Promise<SyncClientStatus>;
     syncNow(): Promise<void>;
     unpair(): SyncClientStatus;
   };

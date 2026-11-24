@@ -539,11 +539,18 @@ export const pt: Messages = {
     unpair: "Desconectar",
     synced: "Sincronizado com o PC",
     secure: "Criptografado com o código de pareamento: seguro até em Wi-Fi público.",
+    scan: "Ler o QR code do PC",
+    scanHint: "Aponte a câmera para o QR code nas Configurações do Earful no PC.",
+    orType: "Ou digite o endereço e o código que aparecem:",
+    cameraDenied: "O Earful não consegue usar a câmera. Permita em Configurações do Android → Apps → Earful → Permissões, ou digite o endereço e o código.",
+    qrLabel: "QR code de pareamento",
+    qrHint: "Leia com o Earful no celular, ou digite o endereço e o código.",
     errors: {
       unreachable: "Não foi possível alcançar o PC. Ele está no mesmo Wi-Fi, com o Earful aberto e a sincronização ativada?",
       wrongCode: "O código não confere com o do PC.",
       badAddress: "Digite o endereço como aparece no PC, como 192.168.1.5:4281.",
       badCode: "O código tem 16 letras e números, como ABCD-EFGH-JKMN-PQRS.",
+      notPairingCode: "Esse QR code não é um código de pareamento do Earful. Leia o que aparece nas Configurações do PC.",
     },
   },
 

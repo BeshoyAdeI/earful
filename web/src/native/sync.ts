@@ -2,7 +2,7 @@ import { App } from "@capacitor/app";
 import { CapacitorHttp } from "@capacitor/core";
 import { getLibrary, syncLibrary } from "../../../server/src/library";
 import { mergePlays, playsSince } from "../../../server/src/plays";
-import { keyFor, normalizeCode, seal, SYNC_PATH, SYNC_PORT, unseal, type SyncRequest, type SyncResponse } from "../../../server/src/sync";
+import { keyFor, normalizeCode, parsePairingLink, seal, SYNC_PATH, SYNC_PORT, unseal, type SyncRequest, type SyncResponse } from "../../../server/src/sync";
 import type { SyncClientStatus } from "../lib/apiTypes";
 
 /**
@@ -177,22 +177,38 @@ export function syncNow(manual = false): Promise<void> {
   return syncing;
 }
 
-/** Pairs with the PC at `address` using its code, and syncs once to check both. */
-export async function pair(address: string, code: string): Promise<SyncClientStatus> {
-  const host = hostOf(address);
-  if (!host) throw new SyncError("badAddress");
+/**
+ * Pairs with the PC using its code, and syncs once to check both. `address` is what was typed, or every address
+ * from the PC's QR code: the first one that answers is kept.
+ */
+export async function pair(address: string | string[], code: string): Promise<SyncClientStatus> {
+  const hosts = (Array.isArray(address) ? address : [address]).map(hostOf).filter((h): h is string => !!h);
+  if (!hosts.length) throw new SyncError("badAddress");
   const clean = normalizeCode(code);
   if (!clean) throw new SyncError("badCode");
   const before = paired;
-  paired = { host, code: clean };
-  try {
-    await syncNow(true);
-  } catch (error) {
-    paired = before;
-    write();
-    throw error;
+  let failure: unknown;
+  for (const host of hosts) {
+    paired = { host, code: clean };
+    try {
+      await syncNow(true);
+      return syncStatus();
+    } catch (error) {
+      failure = error;
+      // A wrong code is wrong at every address.
+      if (error instanceof SyncError && error.reason === "wrongCode") break;
+    }
   }
-  return syncStatus();
+  paired = before;
+  write();
+  throw failure;
+}
+
+/** Pairs from a scanned QR code; throws "notPairingCode" for any other QR code. */
+export async function pairFromQr(text: string): Promise<SyncClientStatus> {
+  const link = parsePairingLink(text);
+  if (!link) throw new SyncError("notPairingCode");
+  return pair(link.hosts, link.code);
 }
 
 export function unpair(): SyncClientStatus {

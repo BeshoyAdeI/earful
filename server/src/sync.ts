@@ -143,3 +143,21 @@ export async function answerSync(key: CryptoKey, envelope: unknown): Promise<Env
   const response: SyncResponse = { kind: "synced", t: Date.now(), library, plays: await playsSince(since) };
   return seal(key, response);
 }
+
+/**
+ * What the PC's pairing QR code holds: every address it can be reached at, and the code.
+ * "earful-sync:?h=192.168.1.5:4281,10.0.0.7:4281&c=ABCD-EFGH-JKMN-PQRS"
+ */
+export function pairingLink(addresses: string[], code: string): string {
+  return `earful-sync:?h=${addresses.join(",")}&c=${code}`;
+}
+
+/** Reads a scanned pairing QR code; null when it's some other QR code. */
+export function parsePairingLink(text: string): { hosts: string[]; code: string } | null {
+  const m = /^earful-sync:\?(.*)$/i.exec(text.trim());
+  if (!m) return null;
+  const params = new URLSearchParams(m[1]);
+  const code = normalizeCode(params.get("c") ?? "");
+  const hosts = (params.get("h") ?? "").split(",").map((h) => h.trim()).filter((h) => /^[\w.-]+:\d{1,5}$/.test(h)).slice(0, 8);
+  return code && hosts.length ? { hosts, code } : null;
+}

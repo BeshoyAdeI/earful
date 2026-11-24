@@ -1,10 +1,13 @@
-import { ArrowsClockwiseIcon, DeviceMobileIcon, DesktopIcon, LockSimpleIcon } from "@phosphor-icons/react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { ArrowsClockwiseIcon, DeviceMobileIcon, DesktopIcon, LockSimpleIcon, QrCodeIcon } from "@phosphor-icons/react";
+import qrcode from "qrcode-generator";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { pairingLink } from "../../../server/src/sync";
 import { useT } from "../i18n";
 import { api } from "../lib/api";
 import type { SyncClientStatus, SyncStatus } from "../lib/apiTypes";
 import { cn } from "../lib/format";
 import { toast } from "../stores/ui";
+import { QrScanner } from "./QrScanner";
 
 /** "3 minutes ago", in the app language. */
 function ago(at: number, locale: string): string {
@@ -25,6 +28,24 @@ function Secure() {
     <p className="flex items-center gap-1.5 text-xs text-fg-3">
       <LockSimpleIcon size={13} /> {t.sync.secure}
     </p>
+  );
+}
+
+/** The PC's pairing QR code (every address and the code), for the phone to scan. */
+function PairingQr({ addresses, code }: { addresses: string[]; code: string }) {
+  const t = useT();
+  const svg = useMemo(() => {
+    const qr = qrcode(0, "M");
+    qr.addData(pairingLink(addresses, code));
+    qr.make();
+    return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  }, [addresses, code]);
+  return (
+    <div className="flex flex-col items-center gap-2">
+      {/* Dark on white in both themes: cameras read it best that way. */}
+      <div role="img" aria-label={t.sync.qrLabel} className="size-44 rounded-[12px] bg-white p-1" dangerouslySetInnerHTML={{ __html: svg }} />
+      <p className="text-center text-xs text-fg-2">{t.sync.qrHint}</p>
+    </div>
   );
 }
 
@@ -98,6 +119,8 @@ function HostPanel({ host }: { host: NonNullable<typeof api.syncHost> }) {
             ) : status.addresses.length === 0 ? (
               <p className="text-sm text-danger">{t.sync.noNetwork}</p>
             ) : (
+              <>
+              <PairingQr addresses={status.addresses} code={status.code} />
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-[12px] bg-surface-2 px-3 py-2.5">
                   <span className="block text-xs text-fg-3">{t.sync.address}</span>
@@ -110,6 +133,7 @@ function HostPanel({ host }: { host: NonNullable<typeof api.syncHost> }) {
                   <span className="block font-mono text-sm font-semibold tracking-wide select-all">{status.code}</span>
                 </div>
               </div>
+              </>
             )}
             <p className="text-xs text-fg-3">{t.sync.firewall}</p>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -141,6 +165,7 @@ function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> })
   const [address, setAddress] = useState("");
   const [code, setCode] = useState("");
   const [pairing, setPairing] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const errorText = (reason?: string) => (reason && reason in t.sync.errors ? t.sync.errors[reason as keyof typeof t.sync.errors] : undefined);
 
@@ -156,6 +181,24 @@ function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> })
       setPairing(false);
     }
   };
+
+  const closeScanner = useCallback(() => setScanning(false), []);
+  const onScanned = useCallback(
+    async (text: string) => {
+      setScanning(false);
+      setPairing(true);
+      try {
+        await client.pairFromQr(text);
+        toast(t.sync.synced);
+      } catch (e) {
+        toast(errorText((e as Error).message) ?? (e as Error).message, "error");
+      } finally {
+        setPairing(false);
+      }
+    },
+    // errorText only reads `t`.
+    [client, t],
+  );
 
   const input =
     "h-11 w-full rounded-full border border-line-strong bg-surface-2 px-4 text-[15px] placeholder:text-fg-3 focus:border-accent focus:outline-none";
@@ -201,6 +244,15 @@ function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> })
             }}
           >
             <p className="text-sm text-fg-2">{t.sync.clientBody}</p>
+            <button
+              type="button"
+              disabled={pairing}
+              onClick={() => setScanning(true)}
+              className={cn(button, "h-11 bg-accent text-accent-ink")}
+            >
+              <QrCodeIcon size={18} /> {pairing ? t.sync.pairing : t.sync.scan}
+            </button>
+            <p className="pt-1 text-xs text-fg-3">{t.sync.orType}</p>
             <input
               value={address}
               onChange={(e) => setAddress(e.target.value)}
@@ -221,13 +273,14 @@ function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> })
               aria-label={t.sync.code}
               className={cn(input, "font-mono tracking-wide")}
             />
-            <button type="submit" disabled={pairing || !address.trim() || !code.trim()} className={cn(button, "self-end bg-accent text-accent-ink")}>
+            <button type="submit" disabled={pairing || !address.trim() || !code.trim()} className={cn(button, "self-end bg-surface-3 hover:bg-surface-4")}>
               {pairing ? t.sync.pairing : t.sync.pair}
             </button>
           </form>
         )}
         <Secure />
       </div>
+      {scanning && <QrScanner onCode={(text) => void onScanned(text)} onClose={closeScanner} />}
     </section>
   );
 }
