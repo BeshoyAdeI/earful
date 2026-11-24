@@ -105,6 +105,70 @@ function tracksFrom(result: { contents?: unknown }, kind: Track["kind"]): Track[
   return tracks;
 }
 
+/**
+ * The songs and videos of YouTube Music's unfiltered search, in its order: the top artist's best songs first, then
+ * whatever matches best, songs or videos. The Songs filter alone misses a hit that YouTube Music only has as a video
+ * and ranks loosely, so the Songs tab starts with these.
+ */
+async function topResults(query: string, lang?: Lang): Promise<Track[]> {
+  const result: any = await withClient((yt) => yt.music.search(query), lang);
+  const seen = new Set<string>();
+  const tracks: Track[] = [];
+  for (const section of Array.isArray(result.contents) ? result.contents : []) {
+    // The top card is an artist with their best songs, and those songs leave the artist out: it's the card's title.
+    const cardArtistId = section?.type === "MusicCardShelf" ? section.title?.endpoint?.payload?.browseId : undefined;
+    const cardArtist =
+      typeof cardArtistId === "string" && ARTIST_ID.test(cardArtistId) ? { name: text(section.title).trim(), id: cardArtistId } : null;
+    for (const item of Array.isArray(section?.contents) ? section.contents : []) {
+      if (item?.item_type !== "song" && item?.item_type !== "video") continue;
+      const track = toTrack(item, item.item_type === "song" ? "song" : "video");
+      if (track && !track.artist && cardArtist?.name) {
+        track.artist = cardArtist.name;
+        track.artists = [cardArtist];
+      }
+      if (track && !seen.has(track.id)) {
+        seen.add(track.id);
+        tracks.push(track);
+      }
+    }
+  }
+  return tracks;
+}
+
+/** Words to compare in any script: no accents or Arabic diacritics, one spelling for alef, yeh and teh marbuta. */
+function words(s: string): string[] {
+  return s
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+/**
+ * The Songs tab: the top results' songs and videos plus the Songs filter's, best match first. A result scores by how
+ * many of the searched words appear in its title and artists (also inside a longer word: "طيري" in "يطيري"); equal
+ * scores keep YouTube Music's order, top results first. So a hit YouTube Music only has as a video still comes up,
+ * and loose matches the Songs filter adds sink below real ones.
+ */
+function rankByQuery(query: string, top: Track[], filtered: Track[]): Track[] {
+  const wanted = [...new Set(words(query))];
+  const seen = new Set<string>();
+  const all = [...top, ...filtered].filter((t) => !seen.has(t.id) && !!seen.add(t.id));
+  if (!wanted.length) return all;
+  const score = (t: Track) => {
+    const have = words(`${t.title} ${t.artist} ${t.album ?? ""}`);
+    return wanted.filter((w) => have.some((h) => h.includes(w))).length;
+  };
+  return all
+    .map((track, order) => ({ track, order, score: score(track) }))
+    .sort((a, b) => b.score - a.score || a.order - b.order)
+    .map((x) => x.track);
+}
+
 /** Short enough for an error message: "HTTP 403" rather than the whole request URL. */
 function reason(e: unknown): string {
   const message = (e as Error)?.message || String(e);
@@ -119,7 +183,11 @@ function reason(e: unknown): string {
 export async function search(query: string, type: "song" | "video", lang?: Lang): Promise<Track[]> {
   const failures: string[] = [];
   try {
-    const tracks = tracksFrom(await withClient((yt) => yt.music.search(query, { type }), lang), type);
+    const [top, filtered] = await Promise.all([
+      type === "song" ? topResults(query, lang).catch(() => []) : Promise.resolve([]),
+      withClient((yt) => yt.music.search(query, { type }), lang).then((r) => tracksFrom(r, type)),
+    ]);
+    const tracks = type === "song" ? rankByQuery(query, top, filtered) : filtered;
     if (tracks.length) return tracks;
     failures.push("YouTube Music: no results");
   } catch (e) {
