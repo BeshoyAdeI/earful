@@ -1,5 +1,5 @@
 import type { Lang } from "./i18n.js";
-import { text, withClient } from "./search.js";
+import { freshSession, text, withClient } from "./search.js";
 
 /**
  * A track's audio asked straight from YouTube's API, without yt-dlp. The Android app plays it this way, and the
@@ -39,8 +39,26 @@ export async function fetchRemoteClients(key: "clients" | "ios" = "clients"): Pr
   }
 }
 
-/** Tries each client in turn. Throws with YouTube's reason (or an empty message) when none of them has audio. */
+const BOT_CHECK = /not a bot|confirm you.re not|sign in to confirm/i;
+let lastFresh = 0;
+
+/**
+ * Tries each client in turn. Throws with YouTube's reason (or an empty message) when none of them has audio.
+ * When YouTube asks to "confirm you're not a bot", starts a new session and tries once more (at most once a minute,
+ * so a connection that stays blocked isn't hammered).
+ */
 export async function directAudio(id: string, clients: string[], lang?: Lang): Promise<DirectAudio> {
+  try {
+    return await tryClients(id, clients, lang);
+  } catch (e) {
+    if (!BOT_CHECK.test((e as Error).message) || Date.now() - lastFresh < 60_000) throw e;
+    lastFresh = Date.now();
+    freshSession(lang);
+    return tryClients(id, clients, lang);
+  }
+}
+
+async function tryClients(id: string, clients: string[], lang?: Lang): Promise<DirectAudio> {
   let reason = "";
   for (const client of clients) {
     try {

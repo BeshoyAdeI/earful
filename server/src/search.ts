@@ -21,6 +21,14 @@ function yt(hl: string): Promise<Innertube> {
 }
 
 /**
+ * Drops the session for `lang`, so the next call starts a new one (a new visitor id). YouTube's bot check is tied
+ * to the session as well as the connection, and a fresh one is often let through again.
+ */
+export function freshSession(lang?: Lang) {
+  clients.delete(lang ? youtubeLang(lang) : config.lang);
+}
+
+/**
  * Runs `fn` with a YouTube Music session in `lang` (the server default when the caller has none).
  * Retries once with a fresh session, since sessions can go stale.
  */
