@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useT, type Messages } from "../i18n";
 import { cn } from "../lib/format";
 import { useLibrary } from "../stores/library";
+import { byRecentPlay, usePlaylistPlays } from "../stores/playlistPlays";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
 import { Modal } from "./Modal";
@@ -10,7 +11,9 @@ import { Modal } from "./Modal";
 export function AddToPlaylistDialog() {
   const tracks = useUi((s) => s.addToPlaylist);
   const close = useUi((s) => s.openAddToPlaylist);
-  const playlists = useLibrary((s) => s.playlists);
+  // Same order as the sidebar: the playlists played most recently first.
+  const playedAt = usePlaylistPlays((s) => s.playedAt);
+  const playlists = byRecentPlay(useLibrary((s) => s.playlists), playedAt);
   const add = useLibrary((s) => s.addToPlaylist);
   const create = useLibrary((s) => s.createPlaylist);
   const [creating, setCreating] = useState(false);
