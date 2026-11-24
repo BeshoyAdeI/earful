@@ -8,6 +8,8 @@ import { useLibrary } from "../stores/library";
 import { useDownloads } from "../stores/downloads";
 import { openSettings } from "../stores/system";
 import { toast } from "../stores/ui";
+import { goTo } from "../lib/navigation";
+import { paths } from "../lib/routes";
 
 export type Repeat = "off" | "all" | "one";
 /** A code translated where it is shown (so switching languages updates it), or a server error already in the right language. */
@@ -48,6 +50,8 @@ interface PlayerState {
   /** Adds several tracks to the end of the queue (the selection bar), with one notice. */
   addManyToQueue: (tracks: Track[]) => void;
   removeAt: (i: number) => void;
+  /** Moves the track at `from` to position `to` in the queue; the playing track keeps playing. */
+  moveTo: (from: number, to: number) => void;
   jumpTo: (i: number) => void;
   clearUpcoming: () => void;
   startRadio: (track: Track) => Promise<void>;
@@ -613,6 +617,20 @@ export const usePlayer = create<PlayerState>((set, get) => {
       }
     },
 
+    moveTo: (from, to) => {
+      const s = get();
+      const last = s.queue.length - 1;
+      if (from < 0 || from > last || to < 0 || to > last || from === to) return;
+      const queue = [...s.queue];
+      const [moved] = queue.splice(from, 1);
+      queue.splice(to, 0, moved);
+      let index = s.index;
+      if (from === s.index) index = to;
+      else if (from < s.index && to >= s.index) index--;
+      else if (from > s.index && to <= s.index) index++;
+      set({ queue, index });
+    },
+
     jumpTo: (i) => load(i),
 
     clearUpcoming: () => {
@@ -621,11 +639,16 @@ export const usePlayer = create<PlayerState>((set, get) => {
       set({ queue: keep, original: s.original ? keep.slice() : null });
     },
 
+    // The radio becomes a new playlist, so what's playing keeps playing; the notice opens it.
     startRadio: async (track) => {
-      toast(getT().player.startingRadio(track.title));
+      const t = getT().player;
+      toast(t.startingRadio(track.title));
       try {
         const related = await api.radio(track.id);
-        get().playList([track, ...related.filter((t) => t.id !== track.id)], 0);
+        const tracks = [track, ...related.filter((r) => r.id !== track.id)];
+        const playlist = await useLibrary.getState().createPlaylist(t.radioName(track.title), tracks, undefined, { quiet: true });
+        if (!playlist) return; // createPlaylist already said why
+        toast(t.radioReady(playlist.name), "info", { label: t.openRadio, run: () => goTo(paths.playlist(playlist.id)) });
       } catch (e) {
         toast((e as Error).message, "error");
       }

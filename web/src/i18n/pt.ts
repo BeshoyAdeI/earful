@@ -247,6 +247,9 @@ export const pt: Messages = {
     addedToQueue: (title) => `"${title}" adicionada à fila`,
     addedManyToQueue: (n) => `${count(n, "música adicionada", "músicas adicionadas")} à fila`,
     startingRadio: (title) => `Montando rádio de "${title}"`,
+    radioName: (title) => `Rádio ${title}`,
+    radioReady: (name) => `"${name}" está pronta nas suas playlists`,
+    openRadio: "Abrir",
     cantPlay: (title, reason) => `Não foi possível tocar "${title}". ${reason}`,
     aTrack: "esta faixa",
     browserCantPlay: "O navegador não conseguiu reproduzir este formato.",
@@ -273,6 +276,8 @@ export const pt: Messages = {
   queue: {
     emptyTitle: "A fila está vazia",
     emptyBody: 'Toque uma música ou use "Adicionar à fila" no menu de qualquer faixa.',
+    reorder: (title) => `Mover ${title}: arraste, ou use as setas para cima e para baixo`,
+    reorderHint: "Arraste para reordenar",
     removeX: (title) => `Remover ${title} da fila`,
     remove: "Remover da fila",
     nowPlaying: "Tocando agora",

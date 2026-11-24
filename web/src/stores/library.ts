@@ -11,7 +11,7 @@ interface LibraryState extends Library {
   toggleFavorite: (t: Track) => Promise<void>;
   addFavorites: (tracks: Track[]) => Promise<void>;
   recordPlay: (t: Track) => void;
-  createPlaylist: (name: string, tracks?: Track[], id?: string) => Promise<Playlist | null>;
+  createPlaylist: (name: string, tracks?: Track[], id?: string, options?: { quiet?: boolean }) => Promise<Playlist | null>;
   renamePlaylist: (id: string, name: string) => Promise<void>;
   deletePlaylist: (id: string) => Promise<void>;
   addToPlaylist: (id: string, t: Track | Track[]) => Promise<void>;
@@ -73,11 +73,11 @@ export const useLibrary = create<LibraryState>((set, get) => ({
     api.pushHistory(track).catch(() => {});
   },
 
-  createPlaylist: async (name, tracks = [], id) => {
+  createPlaylist: async (name, tracks = [], id, options) => {
     try {
       const p = await api.createPlaylist(name, tracks, id);
       set((s) => ({ playlists: [p, ...s.playlists] }));
-      toast(getT().toasts.playlistCreated(p.name));
+      if (!options?.quiet) toast(getT().toasts.playlistCreated(p.name));
       return p;
     } catch (e) {
       toast((e as Error).message, "error");
