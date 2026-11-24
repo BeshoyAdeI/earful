@@ -42,7 +42,11 @@ function glide(container: HTMLElement, top: number, ms: number): () => void {
   return () => cancelAnimationFrame(frame);
 }
 
-function SyncedLyrics({ lines, size }: { lines: LyricLine[]; size: Size }) {
+/**
+ * Synced lyrics that follow the song. On the stage they can be scrolled and a line seeks to it. In the panel they
+ * can't be scrolled (so swiping over them moves the page or player around them) and a tap opens the stage.
+ */
+function SyncedLyrics({ lines, size, onOpen }: { lines: LyricLine[]; size: Size; onOpen: () => void }) {
   const t = useT();
   const active = usePlayer((s) => activeLine(lines, s.position));
   const scroll = useRef<HTMLDivElement>(null);
@@ -87,6 +91,43 @@ function SyncedLyrics({ lines, size }: { lines: LyricLine[]; size: Size }) {
     const done = setTimeout(() => (gliding.current = false), 720);
     return () => clearTimeout(done);
   }, [active, paused, reduce, stage]);
+
+  if (!stage) {
+    return (
+      <div
+        ref={scroll}
+        role="button"
+        tabIndex={0}
+        aria-label={t.lyrics.expand}
+        title={t.lyrics.expand}
+        onClick={onOpen}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpen();
+          }
+        }}
+        className="min-h-0 flex-1 cursor-pointer overflow-hidden [container-type:size] [mask-image:linear-gradient(to_bottom,transparent,black_12%,black_80%,transparent)]"
+      >
+        <ol aria-hidden="true" className="flex min-h-full flex-col gap-3 px-2 pt-4 pb-[66cqh]">
+          {lines.map(({ text }, i) => (
+            <li key={i} ref={active === i ? line : undefined}>
+              {text && (
+                <span
+                  className={cn(
+                    "inline-block origin-left text-xl leading-snug font-bold text-fg transition-[opacity,transform] duration-500 ease-out motion-reduce:transition-none",
+                    active === i ? "scale-100 opacity-100" : cn("scale-[0.97]", i < active ? "opacity-35" : "opacity-55"),
+                  )}
+                >
+                  {text}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -165,7 +206,18 @@ export function LyricsView({ track, size = "panel" }: { track: Track; size?: Siz
       {lyrics.instrumental ? (
         <p className="flex-1 px-3 py-10 text-center text-sm text-fg-2">{t.lyrics.instrumental}</p>
       ) : lyrics.synced ? (
-        <SyncedLyrics key={track.id} lines={lyrics.synced} size={size} />
+        <SyncedLyrics key={track.id} lines={lyrics.synced} size={size} onOpen={() => setStage(true)} />
+      ) : !stage ? (
+        // Plain lyrics don't follow the song: the panel shows the start, a tap opens all of them.
+        <button
+          type="button"
+          onClick={() => setStage(true)}
+          aria-label={t.lyrics.expand}
+          title={t.lyrics.expand}
+          className="min-h-0 flex-1 overflow-hidden px-2 py-4 text-left [mask-image:linear-gradient(to_bottom,black_75%,transparent)]"
+        >
+          <p className="text-base leading-relaxed whitespace-pre-wrap">{lyrics.plain}</p>
+        </button>
       ) : (
         <div tabIndex={0} aria-label={t.lyrics.title} className="scroll-area min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-4">
           <p className={cn("leading-relaxed whitespace-pre-wrap", stage ? "text-center text-2xl font-semibold md:text-3xl" : "text-base")}>

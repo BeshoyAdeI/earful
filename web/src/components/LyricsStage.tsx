@@ -14,13 +14,32 @@ export function LyricsStage() {
   const setOpen = useUi((s) => s.setLyricsStage);
   const track = usePlayer((s) => s.queue[s.index]);
 
+  // Back closes the stage, and only the stage (not the player or page under it): Escape, Android's Back
+  // (native/android.ts turns it into Escape), the mouse's back button and Alt+Left.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+    const close = (e: Event) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setOpen(false);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.key === "BrowserBack" || e.key === "GoBack" || (e.altKey && e.key === "ArrowLeft")) close(e);
+    };
+    // Chromium goes back on the back button's mouseup; cancelling both halves keeps the page where it is.
+    const onMouse = (e: MouseEvent) => {
+      if (e.button !== 3) return;
+      if (e.type === "mouseup") close(e);
+      else e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("mousedown", onMouse, true);
+    window.addEventListener("mouseup", onMouse, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("mousedown", onMouse, true);
+      window.removeEventListener("mouseup", onMouse, true);
+    };
   }, [open, setOpen]);
 
   // Nothing playing any more: nothing to show.
@@ -35,6 +54,7 @@ export function LyricsStage() {
           role="dialog"
           aria-modal="true"
           aria-label={t.lyrics.title}
+          data-escape-closes
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
