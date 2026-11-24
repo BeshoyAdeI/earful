@@ -85,6 +85,17 @@
   #root {
     height: 100%;
   }
+  /* The app fills the window and scrolls inside its own panels; the page itself never scrolls. Otherwise anything
+     sticking out below the layout, or a scrollIntoView (focus, dragging in the queue), scrolled the whole window and
+     left a blank strip under the app. A fixed body isn't a scroll container and adds no scrollable height. */
+  html {
+    overflow: hidden;
+  }
+  body {
+    position: fixed;
+    inset: 0;
+    overflow: clip;
+  }
   body {
     background: var(--bg);
     color: var(--fg);
