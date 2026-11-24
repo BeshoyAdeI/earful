@@ -134,3 +134,44 @@ export function clearPlays(): Promise<void> {
     needsNewline = false;
   });
 }
+
+/** Plays that started at or after `since` (ms), for sending to the other device. */
+export async function playsSince(since: number): Promise<PlayEvent[]> {
+  return (await allPlays()).filter((e) => e.at >= since);
+}
+
+/**
+ * Adds plays from the other device (sync) or a backup, skipping ones already here: the same song started at the
+ * same moment is the same listen. Invalid entries are skipped. Returns how many were new.
+ */
+export function mergePlays(input: unknown): Promise<number> {
+  const list = Array.isArray(input) ? input : [];
+  return serialized(async () => {
+    const events = await load();
+    const latest = Date.now() + 3_600_000;
+    let lines = "";
+    let added = 0;
+    for (const raw of list) {
+      let event: PlayEvent;
+      try {
+        event = sanitize(raw);
+      } catch {
+        continue;
+      }
+      if (event.at > latest) continue;
+      const known = positions.get(listenKey(event));
+      if (known !== undefined && events[known] && listenKey(events[known]!) === listenKey(event) && events[known]!.sec >= event.sec) continue;
+      add(events, event);
+      lines += JSON.stringify(event) + "\n";
+      added++;
+    }
+    if (lines) {
+      const prefix = needsNewline ? "\n" : "";
+      // If the write leaves a partial line behind, the next one starts on a fresh line.
+      needsNewline = true;
+      await storage.append(prefix + lines);
+      needsNewline = false;
+    }
+    return added;
+  });
+}

@@ -4,6 +4,7 @@ import { cleanAppearance, currentAppearance, useAppearance, type Appearance } fr
 import { useLibrary } from "../stores/library";
 import { useUi } from "../stores/ui";
 import { api, saveFile, type ImportResult } from "./api";
+import type { PlayEvent } from "./apiTypes";
 import type { Library } from "./types";
 
 /**
@@ -16,6 +17,8 @@ export interface Backup {
   exportedAt: string;
   app: string;
   library: Library;
+  /** Every listen, for the stats (backups from 1.6.10 on). Importing always merges them. */
+  plays?: PlayEvent[];
   settings?: {
     theme?: "dark" | "light";
     lang?: string;
@@ -28,14 +31,15 @@ export interface Backup {
 }
 
 export async function createBackup(): Promise<Backup> {
-  const library = await api.library();
+  const [library, plays] = await Promise.all([api.library(), api.allPlays().catch(() => undefined)]);
   const p = usePlayer.getState();
   return {
     format: "earful-backup",
     version: 1,
     exportedAt: new Date().toISOString(),
     app: `Earful ${__APP_VERSION__}`,
-    library: { favorites: library.favorites, playlists: library.playlists, history: library.history },
+    library: { favorites: library.favorites, playlists: library.playlists, history: library.history, stamps: library.stamps },
+    plays,
     settings: {
       theme: useUi.getState().theme,
       lang: getLang(),
@@ -77,6 +81,7 @@ export function summarize(backup: Backup) {
     playlistTracks: playlists.reduce((n, p) => n + (Array.isArray(p.tracks) ? p.tracks.length : 0), 0),
     favorites: Array.isArray(lib.favorites) ? lib.favorites.length : 0,
     history: Array.isArray(lib.history) ? lib.history.length : 0,
+    plays: Array.isArray(backup.plays) ? backup.plays.length : 0,
     exportedAt: new Date(backup.exportedAt),
   };
 }

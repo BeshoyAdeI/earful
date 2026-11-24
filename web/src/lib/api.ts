@@ -11,6 +11,8 @@ import {
   type SystemInfo,
   type SystemJob,
   type SystemMedia,
+  type SyncStatus,
+  type PlayEvent,
 } from "./apiTypes";
 import type { AlbumCard, AlbumPage, ArtistPage, ArtistSongs, Genre, GenreArtist, GenrePage, Library, Lyrics, Playlist, Track } from "./types";
 
@@ -95,6 +97,12 @@ export const api: EarfulApi = {
     return request(`/api/stats?${params}`, { signal });
   },
   clearPlays: () => request("/api/plays", { method: "DELETE" }),
+  allPlays: () => request<{ plays: PlayEvent[] }>("/api/plays").then((r) => r.plays),
+  syncHost: {
+    status: () => request<SyncStatus>("/api/sync"),
+    setEnabled: (enabled) => request<SyncStatus>("/api/sync", { method: "PUT", json: { enabled } }),
+    newCode: () => request<SyncStatus>("/api/sync/code", { method: "POST" }),
+  },
   imageSrc: (url) => `/api/image?${new URLSearchParams({ u: url })}`,
   saveImage: downloadBlob,
   canShareImage: async (name, blob) => typeof navigator.share === "function" &&

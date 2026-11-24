@@ -17,7 +17,7 @@ import {
 import { msg, tr, type MsgKey } from "../../../server/src/i18n";
 import { lyricsFor } from "../../../server/src/lyrics";
 import { coverUrl, isCoverType, MAX_COVER_BYTES } from "../../../server/src/image";
-import { allPlays, clearPlays, recordPlay, usePlaysStorage } from "../../../server/src/plays";
+import { allPlays, clearPlays, mergePlays, recordPlay, usePlaysStorage } from "../../../server/src/plays";
 import { computeStats } from "../../../server/src/stats";
 import { nativePlaysStorage } from "./playsStorage";
 import { config } from "./shims/config";
@@ -37,6 +37,7 @@ import { forgetUrl, resolveAudio } from "./streams";
 // phone instead of behind HTTP. The build swaps lib/api.ts for this module (see vite.config.ts).
 export * from "../lib/apiTypes";
 export { onExternalFile } from "./playlistFiles";
+import { onSyncChange, pair, syncNow, syncStatus, unpair } from "./sync";
 
 library.useLibraryStorage(nativeStorage);
 usePlaysStorage(nativePlaysStorage);
@@ -132,6 +133,8 @@ export const api: EarfulApi = {
   recordPlay: (event) => call(() => recordPlay(event)),
   stats: (range, signal) => call(async () => computeStats(await allPlays(), range), signal),
   clearPlays: () => call(clearPlays),
+  allPlays: () => call(allPlays),
+  syncClient: { status: syncStatus, subscribe: onSyncChange, pair, syncNow: () => syncNow(true), unpair },
   imageSrc: async (src) => {
     const url = coverUrl(src);
     if (!url) throw fail(400, "invalidCover");
@@ -157,10 +160,12 @@ export const api: EarfulApi = {
   removeFromPlaylist: (id, trackId) => call(() => library.removeFromPlaylist(id, trackId)),
   importLibrary: (backup, mode) =>
     call(async () => {
-      const b = (backup ?? {}) as { format?: unknown; version?: unknown; library?: unknown };
+      const b = (backup ?? {}) as { format?: unknown; version?: unknown; library?: unknown; plays?: unknown };
       if (b.format !== "earful-backup") throw fail(400, "notBackup");
       if (typeof b.version !== "number" || b.version > 1) throw fail(400, "newerBackup");
-      return library.importLibrary(b.library, mode);
+      const result = await library.importLibrary(b.library, mode);
+      // Listening stats are always merged, never replaced.
+      return { ...result, playsAdded: await mergePlays(b.plays) };
     }),
 
   system: async () => SYSTEM,

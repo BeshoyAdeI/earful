@@ -1,3 +1,4 @@
+import type { SyncStatus } from "../../../server/src/syncServer.js";
 import type { AlbumCard, AlbumPage, ArtistPage, ArtistSongs, Genre, GenreArtist, GenrePage, Library, Lyrics, Playlist, Track } from "./types";
 
 import type { PlayEvent } from "../../../server/src/plays.js";
@@ -20,11 +21,25 @@ export class ApiError extends Error {
 
 export type Channel = "stable" | "nightly";
 
+export type { SyncStatus };
+
+/** The phone's side of sync (native/sync.ts). */
+export interface SyncClientStatus {
+  paired: boolean;
+  /** The PC, "192.168.1.5:4281". */
+  host?: string;
+  lastSyncAt?: number;
+  syncing: boolean;
+  error?: "unreachable" | "wrongCode" | "badAddress" | "badCode";
+}
+
 export interface ImportResult {
   playlistsAdded: number;
   playlistsMerged: number;
   tracksAdded: number;
   favoritesAdded: number;
+  /** Listens added to the stats (backups from 1.6.10 on carry them). */
+  playsAdded?: number;
 }
 
 export interface SystemJob {
@@ -139,6 +154,23 @@ export interface EarfulApi {
   recordPlayBeacon?(event: PlayEvent): boolean;
   stats(range: StatsRange, signal?: AbortSignal): Promise<Stats>;
   clearPlays(): Promise<void>;
+  /** Every play, for backups. */
+  allPlays(): Promise<PlayEvent[]>;
+  /** Phone sync, the PC's side (server/src/syncServer.ts): missing where this device can't be synced to. */
+  syncHost?: {
+    status(): Promise<SyncStatus>;
+    setEnabled(enabled: boolean): Promise<SyncStatus>;
+    newCode(): Promise<SyncStatus>;
+  };
+  /** Phone sync, the phone's side (native/sync.ts): missing outside the phone apps. */
+  syncClient?: {
+    status(): SyncClientStatus;
+    subscribe(listener: () => void): () => void;
+    /** Throws an Error whose message is a SyncClientStatus error. */
+    pair(address: string, code: string): Promise<SyncClientStatus>;
+    syncNow(): Promise<void>;
+    unpair(): SyncClientStatus;
+  };
   imageSrc(url: string): string | Promise<string>;
   saveImage(name: string, blob: Blob): Promise<void>;
   canShareImage(name: string, blob: Blob): Promise<boolean>;

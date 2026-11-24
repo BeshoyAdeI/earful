@@ -14,6 +14,7 @@ import { cn } from "../lib/format";
 import { useSystem } from "../stores/system";
 import { toast, useUi } from "../stores/ui";
 import { BackupSection } from "./BackupSection";
+import { SyncSection } from "./SyncSection";
 import { UpdateSection } from "./UpdateSection";
 import { OfflineSection } from "./OfflineSection";
 import { SpotifyImport } from "./SpotifyImport";
@@ -210,6 +211,8 @@ export function SettingsDialog() {
         <LayoutSection />
 
         {open && <OfflineSection />}
+
+        <SyncSection />
 
         <BackupSection />
 

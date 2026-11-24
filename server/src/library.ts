@@ -1,5 +1,5 @@
 import { msg } from "./i18n.js";
-import { ARTIST_ID, HttpError, VIDEO_ID, type Library, type Playlist, type Track } from "./types.js";
+import { ARTIST_ID, HttpError, VIDEO_ID, type Library, type LibraryStamps, type Playlist, type Track } from "./types.js";
 
 // No Node-only imports here: the Android app runs this same module, with its own storage.
 
@@ -68,6 +68,12 @@ export function sanitizeTrack(input: unknown): Track {
   };
 }
 
+/** Notes the time of a change, for merging with another copy of the library (see mergeLibraries). */
+function stamp(lib: Library, kind: keyof LibraryStamps, id: string, at = Date.now()) {
+  const stamps = (lib.stamps ??= {});
+  (stamps[kind] ??= {})[id] = at;
+}
+
 function findPlaylist(lib: Library, pid: string): Playlist {
   const p = lib.playlists.find((x) => x.id === pid);
   if (!p) throw new HttpError(404, msg("playlistNotFound"));
@@ -81,6 +87,7 @@ export async function getLibrary(): Promise<Library> {
 export async function addFavorite(track: Track): Promise<Track[]> {
   const lib = await load();
   lib.favorites = [track, ...lib.favorites.filter((t) => t.id !== track.id)];
+  stamp(lib, "favoriteAdded", track.id);
   await persist();
   return lib.favorites;
 }
@@ -91,6 +98,9 @@ export async function addFavorites(tracks: Track[]): Promise<Track[]> {
   const seen = new Set(lib.favorites.map((t) => t.id));
   const added = tracks.filter((t) => !seen.has(t.id) && !!seen.add(t.id));
   lib.favorites = [...added, ...lib.favorites];
+  const now = Date.now();
+  // Later in the list = added earlier, so a merge keeps this order.
+  added.forEach((t, i) => stamp(lib, "favoriteAdded", t.id, now - i));
   await persist();
   return lib.favorites;
 }
@@ -98,6 +108,7 @@ export async function addFavorites(tracks: Track[]): Promise<Track[]> {
 export async function removeFavorite(id: string): Promise<Track[]> {
   const lib = await load();
   lib.favorites = lib.favorites.filter((t) => t.id !== id);
+  stamp(lib, "favoriteRemoved", id);
   await persist();
   return lib.favorites;
 }
@@ -142,6 +153,7 @@ export async function deletePlaylist(pid: string): Promise<void> {
   const lib = await load();
   findPlaylist(lib, pid);
   lib.playlists = lib.playlists.filter((p) => p.id !== pid);
+  stamp(lib, "playlistRemoved", pid);
   await persist();
 }
 
@@ -259,4 +271,98 @@ export async function importLibrary(input: unknown, mode: "merge" | "replace"): 
   lib.history = union(lib.history, incoming.history).list.slice(0, HISTORY_LIMIT);
   await persist();
   return result;
+}
+
+// Sync: two copies of the library (the phone's and the PC's) merged into one, the same result on both sides.
+
+const MAX_STAMPS = 20_000;
+
+function cleanStampMap(input: unknown, key: RegExp): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!input || typeof input !== "object") return out;
+  let n = 0;
+  for (const [id, at] of Object.entries(input as Record<string, unknown>)) {
+    if (n >= MAX_STAMPS) break;
+    if (!key.test(id) || typeof at !== "number" || !Number.isFinite(at) || at < 0) continue;
+    out[id] = Math.trunc(at);
+    n++;
+  }
+  return out;
+}
+
+function cleanStamps(input: unknown): LibraryStamps {
+  const s = (input ?? {}) as Record<string, unknown>;
+  return {
+    favoriteAdded: cleanStampMap(s.favoriteAdded, VIDEO_ID),
+    favoriteRemoved: cleanStampMap(s.favoriteRemoved, VIDEO_ID),
+    playlistRemoved: cleanStampMap(s.playlistRemoved, PLAYLIST_ID),
+  };
+}
+
+/** The later of each time in two maps. */
+function latest(a: Record<string, number> = {}, b: Record<string, number> = {}): Record<string, number> {
+  const out = { ...a };
+  for (const [id, at] of Object.entries(b)) if (!(id in out) || at > out[id]!) out[id] = at;
+  return out;
+}
+
+/**
+ * Merges two copies of a library; the result doesn't depend on which one is "local".
+ * - Favorites: the latest change per song wins (added or removed). Songs favorited before stamps existed count as
+ *   added long ago, so a removal on the other side still applies.
+ * - Playlists: the copy changed last wins, whole (name and songs); a deletion wins over changes made before it.
+ * - Recently played: both lists, this one first.
+ */
+export function mergeLibraries(local: Library, remote: Library): Library {
+  const added = latest(local.stamps?.favoriteAdded, remote.stamps?.favoriteAdded);
+  const removed = latest(local.stamps?.favoriteRemoved, remote.stamps?.favoriteRemoved);
+  const playlistRemoved = latest(local.stamps?.playlistRemoved, remote.stamps?.playlistRemoved);
+
+  const favorites: { track: Track; at: number; order: number }[] = [];
+  const seenFav = new Set<string>();
+  [...local.favorites, ...remote.favorites].forEach((track, order) => {
+    if (seenFav.has(track.id)) return;
+    seenFav.add(track.id);
+    const at = added[track.id] ?? 0;
+    if ((removed[track.id] ?? -1) >= at && removed[track.id] !== undefined) return;
+    favorites.push({ track, at, order });
+  });
+  favorites.sort((a, b) => b.at - a.at || a.order - b.order);
+
+  const remoteById = new Map(remote.playlists.map((p) => [p.id, p]));
+  const playlists: Playlist[] = [];
+  const seenList = new Set<string>();
+  for (const mine of local.playlists) {
+    const theirs = remoteById.get(mine.id);
+    const winner = theirs && theirs.updatedAt > mine.updatedAt ? theirs : mine;
+    seenList.add(mine.id);
+    if ((playlistRemoved[mine.id] ?? -1) >= winner.updatedAt) continue;
+    playlists.push(winner);
+  }
+  for (const theirs of remote.playlists) {
+    if (seenList.has(theirs.id)) continue;
+    seenList.add(theirs.id);
+    if ((playlistRemoved[theirs.id] ?? -1) >= theirs.updatedAt) continue;
+    playlists.push(theirs);
+  }
+
+  const seenHistory = new Set<string>();
+  const history = [...local.history, ...remote.history].filter((t) => !seenHistory.has(t.id) && !!seenHistory.add(t.id)).slice(0, HISTORY_LIMIT);
+
+  return {
+    favorites: favorites.map((f) => f.track),
+    playlists,
+    history,
+    stamps: { favoriteAdded: added, favoriteRemoved: removed, playlistRemoved },
+  };
+}
+
+/** Merges a library sent by the other device into this one and saves it. Returns the merged library. */
+export async function syncLibrary(input: unknown): Promise<Library> {
+  const incoming = cleanLibrary(input);
+  incoming.stamps = cleanStamps((input as { stamps?: unknown } | null)?.stamps);
+  const lib = await load();
+  state = mergeLibraries(lib, incoming);
+  await persist();
+  return state;
 }

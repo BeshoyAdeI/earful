@@ -11,7 +11,8 @@ import { createDiscordPresence } from "./discord.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
 import { coverUrl, isCoverType, MAX_COVER_BYTES } from "./image.js";
-import { allPlays, clearPlays, recordPlay, usePlaysStorage } from "./plays.js";
+import { allPlays, clearPlays, mergePlays, recordPlay, usePlaysStorage } from "./plays.js";
+import { newSyncCode, setSyncEnabled, startSyncIfEnabled, syncStatus } from "./syncServer.js";
 import { playsFileStorage } from "./playsFile.js";
 import { computeStats } from "./stats.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
@@ -292,6 +293,9 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return reply.code(204).send();
   });
 
+  // Every play, for backups.
+  app.get("/api/plays", async () => ({ plays: await allPlays() }));
+
   app.delete("/api/plays", async (_req, reply) => {
     await clearPlays();
     return reply.code(204).send();
@@ -351,14 +355,29 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   /** Restores a backup file exported by any Earful instance. Big libraries need more than the 1 MB default body. */
   app.post("/api/library/import", { bodyLimit: 25 * 1024 * 1024 }, async (req) => {
-    const body = (req.body ?? {}) as { backup?: { format?: unknown; version?: unknown; library?: unknown }; mode?: unknown };
+    const body = (req.body ?? {}) as { backup?: { format?: unknown; version?: unknown; library?: unknown; plays?: unknown }; mode?: unknown };
     const backup = body.backup;
     if (backup?.format !== "earful-backup") throw new HttpError(400, msg("notBackup"));
     if (typeof backup.version !== "number" || backup.version > 1) {
       throw new HttpError(400, msg("newerBackup"));
     }
-    return library.importLibrary(backup.library, body.mode === "replace" ? "replace" : "merge");
+    const result = await library.importLibrary(backup.library, body.mode === "replace" ? "replace" : "merge");
+    // Listening stats are always merged, never replaced: a backup only adds the plays this Earful lacks.
+    return { ...result, playsAdded: await mergePlays(backup.plays) };
   });
+
+  // Phone sync settings (syncServer.ts): only for this computer itself. On a server shared on the network, someone
+  // else must not be able to read the pairing code or turn sync on.
+  const local = (ip: string) => ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  const onlyLocal = (req: { ip: string }) => {
+    if (!local(req.ip)) throw new HttpError(403, msg("syncLocalOnly"));
+  };
+  app.get("/api/sync", (req) => (onlyLocal(req), syncStatus()));
+  app.put("/api/sync", async (req) => {
+    onlyLocal(req);
+    return setSyncEnabled((req.body as { enabled?: unknown } | null)?.enabled === true);
+  });
+  app.post("/api/sync/code", (req) => (onlyLocal(req), newSyncCode()));
 
   app.put("/api/favorites/:id", async (req) => {
     const track = library.sanitizeTrack(req.body);
@@ -433,6 +452,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     flushAudioCache();
   });
   await app.listen({ port, host });
+  await startSyncIfEnabled();
   prune();
   audioPruner = setInterval(prune, 3600_000).unref();
 

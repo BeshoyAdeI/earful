@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Phone sync (web/src/native/sync.ts) talks to Earful on the user's PC over plain HTTP on the local network: a PC on
+  the LAN has no HTTPS certificate. That's safe because every sync message is encrypted and authenticated with the
+  pairing code (AES-256-GCM, server/src/sync.ts). Android can't allow plain HTTP for "local addresses" only, so it's
+  allowed in general; everything else the app talks to (YouTube, lyrics, GitHub) uses HTTPS anyway.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

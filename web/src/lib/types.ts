@@ -27,6 +27,12 @@ export interface Library {
   favorites: Track[];
   playlists: Playlist[];
   history: Track[];
+  /** When favorites and playlists changed or were removed: lets sync and backups merge (server/src/types.ts). */
+  stamps?: {
+    favoriteAdded?: Record<string, number>;
+    favoriteRemoved?: Record<string, number>;
+    playlistRemoved?: Record<string, number>;
+  };
 }
 
 export interface Genre {

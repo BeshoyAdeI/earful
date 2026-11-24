@@ -26,6 +26,15 @@ export interface Library {
   favorites: Track[];
   playlists: Playlist[];
   history: Track[];
+  /** When things changed, so two copies of a library can be merged (sync between the phone and the PC). */
+  stamps?: LibraryStamps;
+}
+
+/** Times (ms) of the last change: when each favorite was added or removed, and when each playlist was deleted. */
+export interface LibraryStamps {
+  favoriteAdded?: Record<string, number>;
+  favoriteRemoved?: Record<string, number>;
+  playlistRemoved?: Record<string, number>;
 }
 
 import { tr, type Text } from "./i18n.js";

@@ -55,6 +55,7 @@ export function BackupSection() {
         r.playlistsMerged && t.backup.updatedPlaylists(r.playlistsMerged),
         r.tracksAdded && t.backup.addedTracks(r.tracksAdded),
         r.favoritesAdded && t.backup.addedFavorites(r.favoritesAdded),
+        r.playsAdded && t.backup.addedListens(r.playsAdded),
       ].filter((p): p is string => !!p);
       toast(parts.length ? t.backup.imported(parts) : t.backup.nothingNew);
       setPending(null);
@@ -104,11 +105,12 @@ export function BackupSection() {
             </p>
           </div>
 
-          <ul className="grid grid-cols-3 gap-2 text-center">
+          <ul className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
             {[
               ["playlists", s.playlists, t.backup.playlistsWord(s.playlists), t.backup.tracksIn(s.playlistTracks)],
               ["favorites", s.favorites, t.backup.favoritesWord(s.favorites), null],
               ["history", s.history, t.backup.inHistory, null],
+              ["plays", s.plays, t.backup.listensWord(s.plays), null],
             ].map(([key, n, label, sub]) => (
               <li key={key} className="rounded-[12px] bg-surface-2 px-2 py-2.5">
                 <span className="block font-mono text-lg font-semibold tabular-nums">{n}</span>
