@@ -418,7 +418,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     toast(
       t.player.cantPlay(track?.title ?? t.player.aTrack, message),
       "error",
-      toolProblem ? { label: code === "tool_missing" ? t.common.install : t.common.update, run: openSettings } : undefined,
+      toolProblem ? { label: code === "tool_missing" ? t.common.install : t.common.update, run: () => openSettings("engine") } : undefined,
     );
     if (code !== "tool_missing" && get().index < get().queue.length - 1) {
       setTimeout(() => mine === token && get().next(), 2500);

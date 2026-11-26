@@ -27,8 +27,7 @@ async function load(): Promise<Library> {
   if (state) return state;
   if (!storage) throw new Error("Library storage not configured");
   const json = await storage.read();
-  state = json ? (JSON.parse(json) as Library) : { favorites: [], playlists: [], history: [] };
-  return state;
+  return (state ??= json ? (JSON.parse(json) as Library) : { favorites: [], playlists: [], history: [] });
 }
 
 /** Serialized writes so concurrent requests never interleave. */
@@ -357,12 +356,27 @@ export function mergeLibraries(local: Library, remote: Library): Library {
   };
 }
 
-/** Merges a library sent by the other device into this one and saves it. Returns the merged library. */
-export async function syncLibrary(input: unknown): Promise<Library> {
+/** Merges and saves the library, counting the favorites and playlists changed locally. */
+export async function syncLibrary(input: unknown) {
   const incoming = cleanLibrary(input);
   incoming.stamps = cleanStamps((input as { stamps?: unknown } | null)?.stamps);
-  const lib = await load();
-  state = mergeLibraries(lib, incoming);
+  await load();
+  // Another sync may have merged while this one was waiting for storage.
+  const before = state!;
+  const library = mergeLibraries(before, incoming);
+  const favoriteIds = new Set(before.favorites.map(({ id }) => id));
+  const playlistTimes = new Map(before.playlists.map(({ id, updatedAt }) => [id, updatedAt]));
+  let favorites = 0;
+  let playlists = 0;
+  for (const { id } of library.favorites) {
+    if (!favoriteIds.delete(id)) favorites++;
+  }
+  for (const { id, updatedAt } of library.playlists) {
+    if (playlistTimes.get(id) !== updatedAt) playlists++;
+    playlistTimes.delete(id);
+  }
+  const changed = { favorites: favorites + favoriteIds.size, playlists: playlists + playlistTimes.size };
+  state = library;
   await persist();
-  return state;
+  return { library, changed };
 }

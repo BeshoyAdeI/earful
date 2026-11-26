@@ -19,7 +19,6 @@ export function UpdateSection() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-xs font-medium text-fg-3">{t.update.title}</h3>
       <div className="flex flex-col gap-3 rounded-[16px] bg-surface-1 p-4 ring-1 ring-line">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

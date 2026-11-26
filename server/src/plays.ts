@@ -160,10 +160,13 @@ export function mergePlays(input: unknown): Promise<number> {
       }
       if (event.at > latest) continue;
       const known = positions.get(listenKey(event));
-      if (known !== undefined && events[known] && listenKey(events[known]!) === listenKey(event) && events[known]!.sec >= event.sec) continue;
+      // The slot may hold a newer play by now (the log keeps the latest 300,000): only the same listen counts.
+      const slot = known === undefined ? undefined : events[known];
+      const previous = slot && listenKey(slot) === listenKey(event) ? slot : undefined;
+      if (previous && previous.sec >= event.sec) continue;
       add(events, event);
       lines += JSON.stringify(event) + "\n";
-      added++;
+      if (!previous) added++;
     }
     if (lines) {
       const prefix = needsNewline ? "\n" : "";

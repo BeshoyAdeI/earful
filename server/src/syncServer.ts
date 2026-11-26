@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server } from "node:http";
 import { networkInterfaces } from "node:os";
 import path from "node:path";
 import { config } from "./config.js";
-import { answerSync, keyFor, newPairingCode, SYNC_PATH, SYNC_PORT, SyncAuthError } from "./sync.js";
+import { answerSync, keyFor, newPairingCode, SYNC_PATH, SYNC_PORT, SyncAuthError, type SyncCounts } from "./sync.js";
 
 /**
  * The PC's end of phone sync (see sync.ts): its own small listener, separate from the app's server. It is off until
@@ -24,6 +24,8 @@ let settings: SyncSettings | null = null;
 let server: Server | null = null;
 // Wrong-key messages from one address: after a burst, that address waits a minute.
 const failures = new Map<string, { count: number; since: number }>();
+const active = new Map<IncomingMessage, SyncActivity>();
+const recent: SyncActivity[] = [];
 
 function load(): SyncSettings {
   if (settings) return settings;
@@ -53,6 +55,14 @@ function addresses(): string[] {
     .map((i) => `${i.address}:${SYNC_PORT}`);
 }
 
+export interface SyncActivity {
+  phase: "receiving" | "merging" | "sending" | "done" | "failed";
+  at: number;
+  from?: string;
+  added?: SyncCounts;
+  error?: "wrong code" | "invalid request" | "request too large" | "connection closed" | "sync failed";
+}
+
 export interface SyncStatus {
   enabled: boolean;
   /** Listening right now (false when on but the port couldn't be opened). */
@@ -60,11 +70,19 @@ export interface SyncStatus {
   code: string;
   addresses: string[];
   lastSyncAt?: number;
+  syncing: boolean;
+  activity?: SyncActivity;
+  recent: SyncActivity[];
 }
 
 export function syncStatus(): SyncStatus {
   const s = load();
-  return { enabled: s.enabled, listening: !!server?.listening, code: s.code, addresses: addresses(), lastSyncAt: s.lastSyncAt };
+  let activity = recent[0];
+  for (const request of active.values()) activity = request;
+  return {
+    enabled: s.enabled, listening: !!server?.listening, code: s.code, addresses: addresses(), lastSyncAt: s.lastSyncAt,
+    syncing: active.size > 0, activity, recent: recent.slice(),
+  };
 }
 
 function tooManyFailures(ip: string): boolean {
@@ -93,11 +111,24 @@ async function start(): Promise<void> {
     };
     if (req.method !== "POST" || req.url !== SYNC_PATH) return reply(404);
     if (tooManyFailures(ip)) return reply(429);
+    const from = ip || undefined;
+    const setPhase = (phase: SyncActivity["phase"]) => {
+      active.delete(req);
+      active.set(req, { phase, at: Date.now(), from });
+    };
+    const finish = (result?: Pick<SyncActivity, "phase" | "error" | "added">) => {
+      if (!active.delete(req) || !result) return;
+      recent.unshift({ ...result, at: Date.now(), from });
+      if (recent.length > 10) recent.pop();
+    };
+    setPhase("receiving");
+    res.once("close", () => finish({ phase: "failed", error: "connection closed" }));
     const chunks: Buffer[] = [];
     let size = 0;
     req.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > MAX_BODY) {
+        finish({ phase: "failed", error: "request too large" });
         reply(413);
         req.destroy();
         return;
@@ -108,16 +139,27 @@ async function start(): Promise<void> {
       if (res.writableEnded) return;
       try {
         const envelope = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-        const answer = await answerSync(await keyFor(load().code), envelope);
-        settings!.lastSyncAt = Date.now();
-        save();
-        reply(200, answer);
+        const answer = await answerSync(await keyFor(load().code), envelope, (phase) => {
+          if (active.has(req)) setPhase(phase);
+        });
+        if (!active.has(req)) return;
+        if (answer.added) {
+          settings!.lastSyncAt = Date.now();
+          save();
+          res.once("finish", () => finish({ phase: "done", added: answer.added }));
+        } else {
+          finish(); // Discovery pings do not enter sync history.
+        }
+        reply(200, answer.envelope);
       } catch (error) {
         if (error instanceof SyncAuthError || error instanceof SyntaxError) {
           noteFailure(ip);
-          return reply(403);
+          finish({ phase: "failed", error: error.message === "wrong key" ? "wrong code" : "invalid request" });
+          if (!res.destroyed) reply(403);
+          return;
         }
-        reply(500);
+        finish({ phase: "failed", error: "sync failed" });
+        if (!res.destroyed) reply(500);
       }
     });
   });

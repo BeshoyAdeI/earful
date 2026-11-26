@@ -3,7 +3,7 @@ import { CapacitorHttp } from "@capacitor/core";
 import { getLibrary, syncLibrary } from "../../../server/src/library";
 import { mergePlays, playsSince } from "../../../server/src/plays";
 import { keyFor, normalizeCode, parsePairingLink, seal, SYNC_PATH, SYNC_PORT, unseal, type SyncRequest, type SyncResponse } from "../../../server/src/sync";
-import type { SyncClientStatus } from "../lib/apiTypes";
+import type { SyncClientStatus, SyncCounts } from "../lib/apiTypes";
 
 /**
  * The phone's end of sync with the PC (server/src/sync.ts has the protocol): sends this library and its recent plays,
@@ -25,11 +25,13 @@ interface Paired {
   host: string;
   code: string;
   lastSyncAt?: number;
+  lastResult?: SyncClientStatus["lastResult"];
 }
 
 let paired: Paired | null = read();
 let syncing: Promise<void> | null = null;
 let lastError: SyncClientStatus["error"];
+let phase: SyncClientStatus["phase"];
 let lastSearch = 0;
 const listeners = new Set<() => void>();
 
@@ -56,12 +58,20 @@ let snapshot: SyncClientStatus | null = null;
 
 /** The current status; the same object until something changes (React's useSyncExternalStore needs that). */
 export function syncStatus(): SyncClientStatus {
-  return (snapshot ??= { paired: !!paired, host: paired?.host, lastSyncAt: paired?.lastSyncAt, syncing: !!syncing, error: lastError });
+  return (snapshot ??= {
+    paired: !!paired, host: paired?.host, lastSyncAt: paired?.lastSyncAt, syncing: !!paired && !!syncing,
+    phase, lastResult: paired?.lastResult, error: lastError,
+  });
 }
 
 function notify() {
   snapshot = null;
   listeners.forEach((l) => l());
+}
+
+function setPhase(next: SyncClientStatus["phase"]) {
+  phase = next;
+  notify();
 }
 
 export function onSyncChange(listener: () => void): () => void {
@@ -99,18 +109,24 @@ async function post(host: string, envelope: unknown, timeoutMs: number): Promise
   return typeof res.data === "string" ? JSON.parse(res.data) : res.data;
 }
 
-async function exchange(host: string, code: string, since: number): Promise<void> {
-  const key = await keyFor(code);
+async function exchange(p: Paired, since: number): Promise<SyncCounts | undefined> {
+  const key = await keyFor(p.code);
   const request: SyncRequest = { kind: "sync", t: Date.now(), since, library: await getLibrary(), plays: await playsSince(since) };
+  const envelope = await seal(key, request);
+  if (paired !== p) return;
+  setPhase("sending");
   let answer: SyncResponse;
   try {
-    answer = await unseal<SyncResponse>(key, await post(host, await seal(key, request), 4000));
+    answer = await unseal<SyncResponse>(key, await post(p.host, envelope, 4000));
+    if (answer.kind !== "synced") throw new SyncError("wrongCode");
   } catch (error) {
     if (error instanceof SyncError) throw error;
     throw new SyncError("wrongCode");
   }
-  await syncLibrary(answer.library);
-  await mergePlays(answer.plays);
+  if (paired !== p) return;
+  setPhase("merging");
+  const { changed } = await syncLibrary(answer.library);
+  return { ...changed, plays: await mergePlays(answer.plays) };
 }
 
 /** Asks every address on the same network as `host` whether it's the paired PC; the first one that answers wins. */
@@ -138,42 +154,52 @@ async function reloadScreens() {
   await useLibrary.getState().load();
 }
 
-async function run(manual: boolean): Promise<void> {
-  const p = paired;
-  if (!p) return;
+async function run(p: Paired, manual: boolean): Promise<void> {
   const startedAt = Date.now();
   const since = p.lastSyncAt ? p.lastSyncAt - OVERLAP_MS : 0;
   try {
+    let changed: SyncCounts | undefined;
     try {
-      await exchange(p.host, p.code, since);
+      changed = await exchange(p, since);
     } catch (error) {
+      if (paired !== p) return;
       // The PC isn't at its last address: look for it on this network (not too often when nobody asked).
       if (!(error instanceof SyncError) || error.reason !== "unreachable") throw error;
       if (!manual && Date.now() - lastSearch < SEARCH_EVERY_MS) throw error;
       lastSearch = Date.now();
+      setPhase("searching");
       const moved = await findPc(p.host, p.code);
+      if (paired !== p) return;
       if (!moved) throw error;
       p.host = moved;
-      await exchange(p.host, p.code, since);
+      setPhase("connecting");
+      changed = await exchange(p, since);
     }
+    if (paired !== p || !changed) return;
     p.lastSyncAt = startedAt;
-    lastError = undefined;
-    write();
+    p.lastResult = { at: Date.now(), ...changed };
+    phase = "done";
+    write(); // Updates the cached snapshot as well.
     await reloadScreens();
   } catch (error) {
+    if (paired !== p) return;
     lastError = error instanceof SyncError ? error.reason : "unreachable";
-    notify();
+    setPhase("failed");
     throw error;
   }
 }
 
 /** Syncs now. `manual`: from the Sync now button (errors are thrown for it to show). */
 export function syncNow(manual = false): Promise<void> {
-  syncing ??= run(manual).finally(() => {
+  if (syncing) return syncing;
+  const p = paired;
+  if (!p) return Promise.resolve();
+  syncing = run(p, manual).finally(() => {
     syncing = null;
     notify();
   });
-  notify();
+  lastError = undefined;
+  setPhase("connecting");
   return syncing;
 }
 
@@ -186,6 +212,7 @@ export async function pair(address: string | string[], code: string): Promise<Sy
   if (!hosts.length) throw new SyncError("badAddress");
   const clean = normalizeCode(code);
   if (!clean) throw new SyncError("badCode");
+  if (syncing) await syncing.catch(() => {});
   const before = paired;
   let failure: unknown;
   for (const host of hosts) {
@@ -214,6 +241,7 @@ export async function pairFromQr(text: string): Promise<SyncClientStatus> {
 export function unpair(): SyncClientStatus {
   paired = null;
   lastError = undefined;
+  phase = undefined;
   write();
   return syncStatus();
 }

@@ -145,7 +145,7 @@ export function SpotifyImport() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-xs font-medium text-fg-3">{t.spotify.title}</h3>
+      <h4 className="text-xs font-medium text-fg-3">{t.spotify.title}</h4>
       <p className="text-sm text-fg-2">{t.spotify.body}</p>
 
       <div className="grid grid-cols-2 gap-2">

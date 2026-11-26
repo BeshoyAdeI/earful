@@ -116,7 +116,7 @@ export default function App() {
       if (!info) return;
       const t = getT();
       if (!info.ytdlp.path) {
-        toast(t.toasts.ytdlpMissing, "error", { label: t.common.install, run: openSettings });
+        toast(t.toasts.ytdlpMissing, "error", { label: t.common.install, run: () => openSettings("engine") });
         return;
       }
       const latest = info.ytdlp.latest[info.ytdlp.channel];
@@ -127,7 +127,7 @@ export default function App() {
         } catch {
           /* private mode */
         }
-        toast(t.toasts.ytdlpUpdate(latest), "info", { label: t.common.update, run: openSettings });
+        toast(t.toasts.ytdlpUpdate(latest), "info", { label: t.common.update, run: () => openSettings("engine") });
       }
     }, 1500);
     return () => clearTimeout(t);

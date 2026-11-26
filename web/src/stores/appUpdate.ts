@@ -51,7 +51,7 @@ function announce(state: UpdateState) {
   if (state.status !== "available" || announced.has(state.version)) return;
   announced.add(state.version);
   const t = getT().update;
-  toast(t.available(state.version), "info", { label: t.view, run: openSettings });
+  toast(t.available(state.version), "info", { label: t.view, run: () => openSettings("updates") });
 }
 
 async function checkPhone(set: (s: Partial<AppUpdateState>) => void) {

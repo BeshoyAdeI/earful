@@ -132,16 +132,28 @@ export interface SyncResponse {
   plays: PlayEvent[];
 }
 
+export interface SyncCounts {
+  favorites: number;
+  playlists: number;
+  plays: number;
+}
+
 /** The PC's side: merges what the phone sent and answers with the merged library and the plays it lacks. */
-export async function answerSync(key: CryptoKey, envelope: unknown): Promise<Envelope> {
+export async function answerSync(
+  key: CryptoKey,
+  envelope: unknown,
+  onPhase: (phase: "merging" | "sending") => void,
+): Promise<{ envelope: Envelope; added?: SyncCounts }> {
   const request = await unseal<SyncRequest | SyncPing>(key, envelope);
-  if (request.kind === "ping") return seal(key, { kind: "pong", t: Date.now() });
+  if (request.kind === "ping") return { envelope: await seal(key, { kind: "pong", t: Date.now() }) };
   if (request.kind !== "sync") throw new SyncAuthError("wrong kind");
-  const library = await syncLibrary(request.library);
-  await mergePlays(request.plays);
+  onPhase("merging");
+  const { library, changed } = await syncLibrary(request.library);
+  const plays = await mergePlays(request.plays);
+  onPhase("sending");
   const since = typeof request.since === "number" && Number.isFinite(request.since) ? request.since : 0;
   const response: SyncResponse = { kind: "synced", t: Date.now(), library, plays: await playsSince(since) };
-  return seal(key, response);
+  return { envelope: await seal(key, response), added: { ...changed, plays } };
 }
 
 /**
