@@ -1,3 +1,4 @@
+import type { Innertube, Types } from "youtubei.js";
 import type { Lang } from "./i18n.js";
 import { freshSession, text, withClient } from "./search.js";
 
@@ -12,6 +13,8 @@ import { freshSession, text, withClient } from "./search.js";
  */
 
 export const DEFAULT_CLIENTS = ["VISIONOS"];
+/** For video (directVideo): VISIONOS can return separate audio and video only; ANDROID also offers a single MP4. */
+export const VIDEO_CLIENTS = [...DEFAULT_CLIENTS, "ANDROID"];
 const REMOTE_CONFIG = "https://raw.githubusercontent.com/BeshoyAdeI/earful/main/mobile/streaming.json";
 
 export interface DirectAudio {
@@ -42,44 +45,72 @@ export async function fetchRemoteClients(key: "clients" | "ios" = "clients"): Pr
 const BOT_CHECK = /not a bot|confirm you.re not|sign in to confirm/i;
 let lastFresh = 0;
 
+type StreamingData = NonNullable<Awaited<ReturnType<Innertube["getBasicInfo"]>>["streaming_data"]>;
+type Format = StreamingData["formats"][number];
+
+export function directAudio(id: string, clients: string[], lang?: Lang): Promise<DirectAudio> {
+  return directStream(id, clients, audioFormat, lang);
+}
+
+/** A single MP4 the phone can play directly, with both picture and sound. */
+export function directVideo(id: string, clients: string[], lang?: Lang): Promise<DirectAudio> {
+  return directStream(id, clients, videoFormat, lang);
+}
+
+function audioFormat(data?: StreamingData): Format | undefined {
+  const formats = [...(data?.adaptive_formats ?? []), ...(data?.formats ?? [])].filter(
+    (f) => f.has_audio && !f.has_video && typeof f.url === "string",
+  );
+  // AAC (m4a) first: it plays everywhere. Highest bitrate within the same kind.
+  return formats.sort(
+    (a, b) => Number(b.mime_type?.startsWith("audio/mp4")) - Number(a.mime_type?.startsWith("audio/mp4")) || (b.bitrate ?? 0) - (a.bitrate ?? 0),
+  )[0];
+}
+
+// The shorter edge covers both landscape and portrait clips.
+const resolution = (f: Format) => Math.min(f.width ?? Infinity, f.height ?? Infinity);
+
+function videoFormat(data?: StreamingData): Format | undefined {
+  const formats = data?.formats?.filter(
+    (f) => f.has_audio && f.has_video && typeof f.url === "string" && f.mime_type?.startsWith("video/mp4"),
+  ) ?? [];
+  return formats.find((f) => f.itag === 18) ?? formats
+    .filter((f) => resolution(f) <= 720)
+    .sort((a, b) => resolution(b) - resolution(a) || b.bitrate - a.bitrate)[0];
+}
+
 /**
- * Tries each client in turn. Throws with YouTube's reason (or an empty message) when none of them has audio.
+ * Tries each client in turn. Throws with YouTube's reason (or an empty message) when no client has a usable format.
  * When YouTube asks to "confirm you're not a bot", starts a new session and tries once more (at most once a minute,
  * so a connection that stays blocked isn't hammered).
  */
-export async function directAudio(id: string, clients: string[], lang?: Lang): Promise<DirectAudio> {
+async function directStream(id: string, clients: string[], pick: (data?: StreamingData) => Format | undefined, lang?: Lang): Promise<DirectAudio> {
   try {
-    return await tryClients(id, clients, lang);
+    return await tryClients(id, clients, pick, lang);
   } catch (e) {
     if (!BOT_CHECK.test((e as Error).message) || Date.now() - lastFresh < 60_000) throw e;
     lastFresh = Date.now();
     freshSession(lang);
-    return tryClients(id, clients, lang);
+    return tryClients(id, clients, pick, lang);
   }
 }
 
-async function tryClients(id: string, clients: string[], lang?: Lang): Promise<DirectAudio> {
+async function tryClients(id: string, clients: string[], pick: (data?: StreamingData) => Format | undefined, lang?: Lang): Promise<DirectAudio> {
   let reason = "";
   for (const client of clients) {
     try {
-      const info: any = await withClient((yt) => yt.getBasicInfo(id, { client: client as never }), lang);
+      const info = await withClient((yt) => yt.getBasicInfo(id, { client: client as Types.InnerTubeClient }), lang);
       const status = info.playability_status;
       if (status?.status && status.status !== "OK") {
         reason = text(status.reason) || reason;
         continue;
       }
-      const formats: any[] = [...(info.streaming_data?.adaptive_formats ?? []), ...(info.streaming_data?.formats ?? [])].filter(
-        (f) => f.has_audio && !f.has_video && typeof f.url === "string",
-      );
-      // AAC (m4a) first: it plays everywhere. Highest bitrate within the same kind.
-      const best = formats.sort(
-        (a, b) => Number(b.mime_type?.startsWith("audio/mp4")) - Number(a.mime_type?.startsWith("audio/mp4")) || (b.bitrate ?? 0) - (a.bitrate ?? 0),
-      )[0];
-      if (!best) continue;
+      const best = pick(info.streaming_data);
+      if (typeof best?.url !== "string") continue;
       const expire = Number(new URL(best.url).searchParams.get("expire")) * 1000;
       return {
         url: best.url,
-        mime: best.mime_type?.startsWith("audio/webm") ? "audio/webm" : "audio/mp4",
+        mime: best.has_video ? "video/mp4" : best.mime_type?.startsWith("audio/webm") ? "audio/webm" : "audio/mp4",
         title: info.basic_info?.title ?? "",
         duration: info.basic_info?.duration ?? 0,
         expiresAt: expire || Date.now() + 3 * 3600_000,

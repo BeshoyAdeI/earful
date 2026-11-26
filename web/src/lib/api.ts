@@ -162,10 +162,11 @@ export function onExternalFile(_handler: ExternalFileHandler): () => void {
 export const systemMedia: SystemMedia | null = null;
 
 /**
- * What this build can do. The Android build has no video yet and no yt-dlp to manage. Every build retries a stream
- * that fails once from the same spot: a passing hiccup otherwise skipped a song that plays fine a moment later.
+ * What this build can do. The Android build plays SD video only (no ffmpeg for HD) and has no yt-dlp to manage. Every
+ * build retries a stream that fails once from the same spot: a passing hiccup otherwise skipped a song that plays fine
+ * a moment later.
  */
-export const capabilities = { video: true, engineSettings: true, retryOnError: true };
+export const capabilities = { video: true, hdVideo: true, engineSettings: true, retryOnError: true };
 
 /** Media elements hide the HTTP error body; fetch it to show the real reason. */
 export async function explainStreamError(url: string): Promise<{ message: string; code?: ErrorCode }> {

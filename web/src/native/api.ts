@@ -31,7 +31,7 @@ import { Device } from "./android";
 import { media } from "./media";
 import * as offline from "./offline";
 import { nativeStorage } from "./storage";
-import { forgetUrl, resolveAudio } from "./streams";
+import { forgetUrl, resolveAudio, resolveVideo } from "./streams";
 
 // The Android backend: the Earful server's own code (search, genres, artists, albums, library), running on the
 // phone instead of behind HTTP. The build swaps lib/api.ts for this module (see vite.config.ts).
@@ -175,7 +175,11 @@ export const api: EarfulApi = {
 };
 
 /** On the phone, the media element plays YouTube's stream directly: resolved here, no proxy needed. */
-export async function streamSource(id: string, _kind?: "audio" | "video", _quality?: "sd" | "hd", ahead = false) {
+export async function streamSource(id: string, kind?: "audio" | "video", _quality?: "sd" | "hd", ahead = false) {
+  if (kind === "video") {
+    if (!capabilities.video) throw fail(404, "noVideo");
+    return (await resolveVideo(id)).url;
+  }
   const hit = await offline.localAudio(id).catch(() => undefined);
   if (!hit) {
     if (ahead) throw fail(404, "noAudio");
@@ -212,4 +216,4 @@ async function shareImage(name: string, blob: Blob, text?: string) {
 
 export const systemMedia = media;
 
-export const capabilities = { video: false, engineSettings: false, retryOnError: true };
+export const capabilities = { video: Capacitor.getPlatform() === "android", hdVideo: false, engineSettings: false, retryOnError: true };

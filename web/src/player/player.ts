@@ -277,7 +277,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
         buffered: 0,
       });
       if (!opts.handoff) activeMedia()?.pause();
-      setMetadata(track);
+      if (!opts.handoff || !systemMedia) setMetadata(track);
+      syncSystemMedia();
       void lookupClip(track).then(() => mine === token && load(index, opts));
       return;
     }
@@ -316,6 +317,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       media.src = src;
       if (autoplay) play(media);
     };
+    let cancelHandoff: (() => void) | undefined;
     if (outgoing) {
       const mine = token;
       const takeOver = () => {
@@ -331,6 +333,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         media.removeEventListener("error", giveUp);
         if (mine === token) stop(outgoing);
       };
+      cancelHandoff = giveUp;
       media.addEventListener("playing", takeOver);
       media.addEventListener("error", giveUp);
     }
@@ -345,10 +348,15 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const mine = token;
       source.then(
         (src) => mine === token && start(src),
-        (err: ApiError) => mine === token && report(err.message, err.code),
+        (err: ApiError) => {
+          if (mine !== token) return;
+          cancelHandoff?.();
+          report(err.message, err.code);
+        },
       );
     }
-    setMetadata(track);
+    if (!opts.handoff || !systemMedia) setMetadata(track);
+    syncSystemMedia();
   }
 
   async function continueWithRadio() {
@@ -411,6 +419,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const mine = token;
     flushListen();
     set({ status: "error", statusText: { error: message } });
+    syncSystemMedia();
     const track = get().queue[get().index];
     // Tool problems hit every track: offer the fix instead of skipping through the whole queue.
     const toolProblem = code === "tool_missing" || code === "maybe_outdated";
@@ -535,9 +544,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     muted: saved.muted ?? false,
     shuffle: saved.shuffle ?? false,
     repeat: saved.repeat ?? "off",
-    // Builds without video (Android) always play audio, whatever a backup or an old session says.
     preferVideo: capabilities.video && (saved.preferVideo ?? false),
-    quality: saved.quality ?? "sd",
+    quality: capabilities.hdVideo ? (saved.quality ?? "sd") : "sd",
     autoRadio: saved.autoRadio ?? true,
 
     playList: (tracks, start = 0) => {
@@ -740,6 +748,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     },
 
     setQuality: (quality) => {
+      if (!capabilities.hdVideo) return;
       set({ quality });
       reloadIfKindChanged();
     },

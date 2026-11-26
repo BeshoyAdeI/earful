@@ -168,20 +168,31 @@ export function Scrubber({ touch = false, className }: { touch?: boolean; classN
   );
 }
 
-export function Volume({ className }: { className?: string }) {
+export function Volume({ className, touch = false }: { className?: string; touch?: boolean }) {
   const t = useT();
   const volume = usePlayer((s) => s.volume);
   const muted = usePlayer((s) => s.muted);
   const setVolume = usePlayer((s) => s.setVolume);
   const toggleMute = usePlayer((s) => s.toggleMute);
   const level = muted ? 0 : volume;
-  const Glyph = level === 0 ? SpeakerXIcon : level < 0.5 ? SpeakerLowIcon : SpeakerHighIcon;
+  const Glyph = level === 0 ? SpeakerXIcon : touch || level < 0.5 ? SpeakerLowIcon : SpeakerHighIcon;
   return (
-    <div className={cn("flex items-center gap-1", className)}>
-      <IconButton label={muted ? t.player.unmute : t.player.mute} size="sm" onClick={toggleMute}>
+    <div className={cn("flex items-center", touch ? "gap-2" : "gap-1", className)}>
+      <IconButton label={muted ? t.player.unmute : t.player.mute} size={touch ? "lg" : "sm"} onClick={toggleMute}>
         <Glyph size={18} />
       </IconButton>
-      <Slider label={t.player.volume} value={level} max={1} step={0.05} live onChange={setVolume} valueText={(v) => `${Math.round(v * 100)}%`} className="w-24" />
+      <Slider
+        label={t.player.volume}
+        value={level * 100}
+        max={100}
+        step={5}
+        live
+        touch={touch}
+        onChange={(v) => setVolume(v / 100)}
+        valueText={(v) => `${Math.round(v)}%`}
+        className={touch ? "flex-1" : "w-24"}
+      />
+      {touch && <SpeakerHighIcon aria-hidden="true" size={18} className="mx-3 shrink-0 text-fg-2" />}
     </div>
   );
 }
@@ -211,7 +222,6 @@ export function ModeSwitch({ className }: { className?: string }) {
   const quality = usePlayer((s) => s.quality);
   const setQuality = usePlayer((s) => s.setQuality);
   const showingVideo = usePlayer((s) => s.mediaKind === "video");
-  // The Android app plays audio only for now.
   if (!capabilities.video) return null;
 
   const seg = (on: boolean) =>
@@ -246,7 +256,7 @@ export function ModeSwitch({ className }: { className?: string }) {
           <VideoCameraIcon size={17} />
         </button>
       </div>
-      {showingVideo && (
+      {showingVideo && capabilities.hdVideo && (
         <button
           type="button"
           onClick={() => setQuality(quality === "sd" ? "hd" : "sd")}
