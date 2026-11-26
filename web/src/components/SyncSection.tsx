@@ -4,19 +4,30 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { pairingLink } from "../../../server/src/sync";
 import { useT } from "../i18n";
 import { api } from "../lib/api";
-import type { SyncClientStatus, SyncStatus } from "../lib/apiTypes";
+import type { SyncClientStatus, SyncCounts, SyncStatus } from "../lib/apiTypes";
 import { cn } from "../lib/format";
 import { toast } from "../stores/ui";
 import { QrScanner } from "./QrScanner";
 
-/** "3 minutes ago", in the app language. */
-function ago(at: number, locale: string): string {
-  const minutes = Math.round((at - Date.now()) / 60_000);
+function ago(at: number, locale: string, justNow: string): string {
+  const minutes = Math.floor((Date.now() - at) / 60_000);
+  if (minutes < 1) return justNow;
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
-  if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
-  const hours = Math.round(minutes / 60);
-  if (Math.abs(hours) < 48) return rtf.format(hours, "hour");
-  return rtf.format(Math.round(hours / 24), "day");
+  if (minutes < 60) return rtf.format(-minutes, "minute");
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return rtf.format(-hours, "hour");
+  return rtf.format(-Math.floor(hours / 24), "day");
+}
+
+function useRelativeTime(open: boolean) {
+  const t = useT();
+  const [, refresh] = useState(0);
+  useEffect(() => {
+    if (!open) return;
+    const timer = setInterval(() => refresh((tick) => tick + 1), 30_000);
+    return () => clearInterval(timer);
+  }, [open]);
+  return (at: number) => ago(at, t.locale, t.sync.justNow);
 }
 
 const box = "flex flex-col gap-3 rounded-[16px] bg-surface-1 p-4 ring-1 ring-line";
@@ -49,25 +60,32 @@ function PairingQr({ addresses, code }: { addresses: string[]; code: string }) {
   );
 }
 
-/** On the PC: turn sync on, and show the address and code to enter on the phone. */
-function HostPanel({ host }: { host: NonNullable<typeof api.syncHost> }) {
-  const t = useT();
-  const [status, setStatus] = useState<SyncStatus | null>(null);
+export function useSyncHost(open: boolean) {
+  const host = api.syncHost;
+  const [status, setStatus] = useState<SyncStatus | null>();
   const [busy, setBusy] = useState(false);
+  const enabled = status?.enabled === true;
 
   useEffect(() => {
+    if (!host || busy) return;
     let live = true;
-    const load = () => host.status().then((s) => live && setStatus(s), () => live && setStatus(null));
+    let timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      try {
+        const next = await host.status();
+        if (live) setStatus(next);
+      } catch {
+        if (live) setStatus((current) => current ?? null);
+      } finally {
+        if (live) timer = setTimeout(load, open && enabled ? 2000 : 15_000);
+      }
+    };
     void load();
-    // The last sync time moves while Settings is open.
-    const timer = setInterval(load, 15_000);
     return () => {
       live = false;
-      clearInterval(timer);
+      clearTimeout(timer);
     };
-  }, [host]);
-
-  if (!status) return null; // not this computer's own Earful (a shared server): nothing to set up here
+  }, [host, open, enabled, busy]);
 
   const act = async (job: () => Promise<SyncStatus>) => {
     setBusy(true);
@@ -80,11 +98,31 @@ function HostPanel({ host }: { host: NonNullable<typeof api.syncHost> }) {
     }
   };
 
+  return { host, status, busy, act };
+}
+
+/** On the PC: turn sync on, and show the address and code to enter on the phone. */
+function HostPanel({ host, open }: { host: ReturnType<typeof useSyncHost>; open: boolean }) {
+  const t = useT();
+  const when = useRelativeTime(open);
+  const { host: controls, status, busy, act } = host;
+  if (!controls || !status) return null;
+
+  const activity = status.activity;
+  const recent = status.recent?.slice(0, 4) ?? [];
+  const { counts, activeWith, fromPhone, waiting, lastSync, hostErrors } = t.sync;
+  const countText = ({ favorites, playlists, plays }: SyncCounts) => counts(favorites, playlists, plays);
+  const hostMessage = status.syncing
+    ? (activity?.from ? activeWith(activity.from) : t.sync.syncing)
+    : activity?.phase === "done" && activity.added
+      ? fromPhone(when(activity.at), countText(activity.added))
+      : status.lastSyncAt && !activity ? lastSync(when(status.lastSyncAt)) : waiting;
+
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="flex items-center gap-1.5 text-xs font-medium text-fg-3">
+      <h4 className="flex items-center gap-1.5 text-xs font-medium text-fg-3">
         <DeviceMobileIcon size={14} /> {t.sync.hostTitle}
-      </h3>
+      </h4>
       <div className={box}>
         <p className="text-sm text-fg-2">{t.sync.hostBody}</p>
         <label className="flex cursor-pointer items-center justify-between gap-3">
@@ -93,7 +131,7 @@ function HostPanel({ host }: { host: NonNullable<typeof api.syncHost> }) {
             type="checkbox"
             checked={status.enabled}
             disabled={busy}
-            onChange={(e) => void act(() => host.setEnabled(e.target.checked))}
+            onChange={(e) => void act(() => controls.setEnabled(e.target.checked))}
             className="peer sr-only"
           />
           <span
@@ -114,36 +152,52 @@ function HostPanel({ host }: { host: NonNullable<typeof api.syncHost> }) {
 
         {status.enabled && (
           <>
+            {status.listening && status.addresses.length > 0 && (
+              <p role="status" className="flex items-start gap-2 text-sm text-fg-2">
+                <span aria-hidden="true" className={cn("mt-1.5 size-2 shrink-0 rounded-full bg-accent", status.syncing && "motion-safe:animate-pulse")} />
+                {hostMessage}
+              </p>
+            )}
             {!status.listening ? (
               <p className="text-sm text-danger">{t.sync.notListening}</p>
             ) : status.addresses.length === 0 ? (
               <p className="text-sm text-danger">{t.sync.noNetwork}</p>
             ) : (
               <>
-              <PairingQr addresses={status.addresses} code={status.code} />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded-[12px] bg-surface-2 px-3 py-2.5">
-                  <span className="block text-xs text-fg-3">{t.sync.address}</span>
-                  {status.addresses.map((a) => (
-                    <span key={a} className="block font-mono text-sm font-semibold select-all">{a}</span>
-                  ))}
+                <PairingQr addresses={status.addresses} code={status.code} />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-[12px] bg-surface-2 px-3 py-2.5">
+                    <span className="block text-xs text-fg-3">{t.sync.address}</span>
+                    {status.addresses.map((a) => (
+                      <span key={a} className="block font-mono text-sm font-semibold select-all">{a}</span>
+                    ))}
+                  </div>
+                  <div className="rounded-[12px] bg-surface-2 px-3 py-2.5">
+                    <span className="block text-xs text-fg-3">{t.sync.code}</span>
+                    <span className="block font-mono text-sm font-semibold tracking-wide select-all">{status.code}</span>
+                  </div>
                 </div>
-                <div className="rounded-[12px] bg-surface-2 px-3 py-2.5">
-                  <span className="block text-xs text-fg-3">{t.sync.code}</span>
-                  <span className="block font-mono text-sm font-semibold tracking-wide select-all">{status.code}</span>
-                </div>
-              </div>
               </>
             )}
             <p className="text-xs text-fg-3">{t.sync.firewall}</p>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-fg-2">
-                {status.lastSyncAt ? t.sync.lastSync(ago(status.lastSyncAt, t.locale)) : t.sync.never}
-              </span>
+            {recent.length > 0 && (
+              <div className="rounded-[12px] bg-surface-2 px-3 py-2">
+                <p className="text-xs font-medium text-fg-3">{t.sync.recent}</p>
+                <ul className="divide-y divide-line">
+                  {recent.map(({ at, phase, error, added, from }, i) => (
+                    <li key={`${at}-${from}-${i}`} className={cn("flex flex-wrap justify-between gap-x-3 py-1.5 text-xs", phase === "failed" ? "text-danger" : "text-fg-2")}>
+                      <span>{phase === "failed" ? hostErrors[error ?? "sync failed"] : added && countText(added)}</span>
+                      <time dateTime={new Date(at).toISOString()}>{when(at)}</time>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void act(host.newCode)}
+                onClick={() => void act(controls.newCode)}
                 title={t.sync.newCodeHint}
                 className={cn(button, "bg-surface-3 hover:bg-surface-4")}
               >
@@ -159,24 +213,29 @@ function HostPanel({ host }: { host: NonNullable<typeof api.syncHost> }) {
 }
 
 /** On the phone: pair with the PC once, then it syncs by itself. */
-function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> }) {
+function ClientPanel({ client, open }: { client: NonNullable<typeof api.syncClient>; open: boolean }) {
   const t = useT();
-  const status = useSyncExternalStore(client.subscribe, client.status) as SyncClientStatus;
+  const when = useRelativeTime(open);
+  const status = useSyncExternalStore(client.subscribe, client.status);
   const [address, setAddress] = useState("");
   const [code, setCode] = useState("");
   const [pairing, setPairing] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [pairError, setPairError] = useState<string>();
 
   const errorText = (reason?: string) => (reason && reason in t.sync.errors ? t.sync.errors[reason as keyof typeof t.sync.errors] : undefined);
 
   const connect = async () => {
     setPairing(true);
+    setPairError(undefined);
     try {
       await client.pair(address, code);
       toast(t.sync.synced);
       setCode("");
     } catch (e) {
-      toast(errorText((e as Error).message) ?? (e as Error).message, "error");
+      const message = errorText((e as Error).message) ?? (e as Error).message;
+      setPairError(message);
+      toast(message, "error");
     } finally {
       setPairing(false);
     }
@@ -187,11 +246,14 @@ function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> })
     async (text: string) => {
       setScanning(false);
       setPairing(true);
+      setPairError(undefined);
       try {
         await client.pairFromQr(text);
         toast(t.sync.synced);
       } catch (e) {
-        toast(errorText((e as Error).message) ?? (e as Error).message, "error");
+        const message = errorText((e as Error).message) ?? (e as Error).message;
+        setPairError(message);
+        toast(message, "error");
       } finally {
         setPairing(false);
       }
@@ -202,20 +264,36 @@ function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> })
 
   const input =
     "h-11 w-full rounded-full border border-line-strong bg-surface-2 px-4 text-[15px] placeholder:text-fg-3 focus:border-accent focus:outline-none";
+  const phases: Partial<Record<NonNullable<SyncClientStatus["phase"]>, string>> = {
+    connecting: t.sync.pairing,
+    searching: t.sync.searching,
+    sending: t.sync.sending,
+    merging: t.sync.merging,
+  };
+  const progress = status.syncing && status.phase !== "done" && status.phase !== "failed" &&
+    (status.phase ? phases[status.phase] : t.sync.syncing);
+  const result = status.lastResult;
+  const summary = result
+    ? t.sync.fromPc(when(result.at), t.sync.counts(result.favorites, result.playlists, result.plays))
+    : status.lastSyncAt ? t.sync.lastSync(when(status.lastSyncAt)) : t.sync.never;
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="flex items-center gap-1.5 text-xs font-medium text-fg-3">
+      <h4 className="flex items-center gap-1.5 text-xs font-medium text-fg-3">
         <DesktopIcon size={14} /> {t.sync.clientTitle}
-      </h3>
+      </h4>
       <div className={box}>
-        {status.paired ? (
+        {progress && (
+          <p role="status" className="flex items-center gap-2 text-sm text-fg-2">
+            <ArrowsClockwiseIcon aria-hidden="true" size={16} className="shrink-0 text-accent-text motion-safe:animate-spin" />
+            {progress}
+          </p>
+        )}
+        {status.paired && !pairing ? (
           <>
             <p className="text-sm font-medium">{t.sync.pairedWith(status.host ?? "")}</p>
-            <p className="text-xs text-fg-2">
-              {status.syncing ? t.sync.syncing : status.lastSyncAt ? t.sync.lastSync(ago(status.lastSyncAt, t.locale)) : t.sync.never}
-            </p>
-            {status.error && !status.syncing && <p className="text-sm text-danger">{errorText(status.error)}</p>}
+            {!progress && <p role="status" className="text-sm text-fg-2">{summary}</p>}
+            {status.error && !progress && <p role="status" className="text-sm text-danger">{errorText(status.error)}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" onClick={() => client.unpair()} className={cn(button, "text-fg-2 hover:text-fg")}>
                 {t.sync.unpair}
@@ -225,13 +303,13 @@ function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> })
                 disabled={status.syncing}
                 onClick={() =>
                   void client.syncNow().then(
-                    () => toast(t.sync.synced),
+                    () => { if (client.status().paired) toast(t.sync.synced); },
                     () => {},
                   )
                 }
                 className={cn(button, "bg-accent text-accent-ink")}
               >
-                <ArrowsClockwiseIcon size={16} className={cn(status.syncing && "animate-spin")} /> {t.sync.syncNow}
+                <ArrowsClockwiseIcon size={16} /> {t.sync.syncNow}
               </button>
             </div>
           </>
@@ -244,6 +322,7 @@ function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> })
             }}
           >
             <p className="text-sm text-fg-2">{t.sync.clientBody}</p>
+            {pairError && <p role="status" className="text-sm text-danger">{pairError}</p>}
             <button
               type="button"
               disabled={pairing}
@@ -286,8 +365,8 @@ function ClientPanel({ client }: { client: NonNullable<typeof api.syncClient> })
 }
 
 /** Settings → sync between the PC and the phone: the PC's panel on the desktop app, the phone's in the phone app. */
-export function SyncSection() {
-  if (api.syncClient) return <ClientPanel client={api.syncClient} />;
-  if (api.syncHost) return <HostPanel host={api.syncHost} />;
+export function SyncSection({ host, open }: { host: ReturnType<typeof useSyncHost>; open: boolean }) {
+  if (api.syncClient) return <ClientPanel client={api.syncClient} open={open} />;
+  if (host.host) return <HostPanel host={host} open={open} />;
   return null;
 }

@@ -13,7 +13,7 @@ import type { Track } from "../lib/types";
 import { IconButton } from "../components/IconButton";
 import { useLibrary } from "../stores/library";
 import { useDownloads } from "../stores/downloads";
-import { useUi } from "../stores/ui";
+import { openSettings } from "../stores/system";
 import { byRecentPlay, usePlaylistPlays } from "../stores/playlistPlays";
 
 function Entry({
@@ -60,7 +60,6 @@ export default function Library() {
   const offline = useDownloads((s) => s.offlineTracks);
   const [creating, setCreating] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const setSettingsOpen = useUi((s) => s.setSettingsOpen);
   const navigate = useNavigate();
   const t = useT();
 
@@ -84,7 +83,7 @@ export default function Library() {
           <IconButton label={t.playlistFile.open} onClick={() => fileInput.current?.click()}>
             <FolderOpenIcon size={20} />
           </IconButton>
-          <IconButton label={t.library.backup} onClick={() => setSettingsOpen(true)}>
+          <IconButton label={t.library.backup} onClick={() => openSettings("backup")}>
             <DatabaseIcon size={20} />
           </IconButton>
           <button

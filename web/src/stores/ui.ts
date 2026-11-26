@@ -26,6 +26,7 @@ export interface TrackMenuState {
 
 type Theme = "dark" | "light";
 export type PanelTab = "playing" | "queue" | "lyrics";
+export type SettingsSection = "appearance" | "playback" | "offline" | "sync" | "backup" | "updates" | "engine";
 
 interface UiState {
   theme: Theme;
@@ -40,6 +41,7 @@ interface UiState {
   addToPlaylist: Track[] | null;
   shortcutsOpen: boolean;
   settingsOpen: boolean;
+  settingsFocus: { section?: SettingsSection } | null;
   /** Cinema view: the video maximized over everything. */
   theater: boolean;
   /** Lyrics on the big centered stage instead of the side panel. */
@@ -59,7 +61,7 @@ interface UiState {
   closePlaylistMenu: () => void;
   openAddToPlaylist: (tracks: Track[] | null) => void;
   setShortcutsOpen: (open: boolean) => void;
-  setSettingsOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean, section?: SettingsSection) => void;
   setTheater: (open: boolean) => void;
   setLyricsStage: (open: boolean) => void;
 }
@@ -85,6 +87,7 @@ export const useUi = create<UiState>((set, get) => ({
   addToPlaylist: null,
   shortcutsOpen: false,
   settingsOpen: false,
+  settingsFocus: null,
   theater: false,
   lyricsStage: false,
 
@@ -144,7 +147,7 @@ export const useUi = create<UiState>((set, get) => ({
   closePlaylistMenu: () => set({ playlistMenu: null }),
   openAddToPlaylist: (addToPlaylist) => set({ addToPlaylist, menu: null }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setSettingsOpen: (settingsOpen, section) => set({ settingsOpen, settingsFocus: settingsOpen ? { section } : null }),
   setTheater: (theater) => set({ theater }),
   setLyricsStage: (lyricsStage) => set({ lyricsStage }),
 }));

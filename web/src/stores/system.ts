@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { api, type Channel, type SystemInfo } from "../lib/api";
-import { toast, useUi } from "./ui";
+import { toast, useUi, type SettingsSection } from "./ui";
+
+export type { SettingsSection } from "./ui";
 
 interface SystemState {
   info: SystemInfo | null;
@@ -11,7 +13,7 @@ interface SystemState {
 
 let polling: ReturnType<typeof setTimeout> | null = null;
 
-export const openSettings = () => useUi.getState().setSettingsOpen(true);
+export const openSettings = (section?: SettingsSection) => useUi.getState().setSettingsOpen(true, section);
 
 export const useSystem = create<SystemState>((set, get) => {
   /** Polls while an update runs, then announces the result once. */

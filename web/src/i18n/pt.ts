@@ -452,6 +452,16 @@ export const pt: Messages = {
 
   settings: {
     title: "Ajustes",
+    navigation: "Seções dos ajustes",
+    groups: {
+      appearance: "Aparência",
+      playback: "Reprodução",
+      offline: "Offline e armazenamento",
+      sync: "Sincronização",
+      backup: "Backup e importação",
+      updates: "Atualizações",
+      engine: "Motor",
+    },
     appearance: "Aparência",
     theme: "Tema",
     dark: "Escuro",
@@ -528,6 +538,21 @@ export const pt: Messages = {
     noNetwork: "Este PC não está conectado a uma rede.",
     lastSync: (when) => `Sincronizado ${when}`,
     never: "Ainda não sincronizado",
+    justNow: "agora mesmo",
+    waiting: "Aguardando seu celular…",
+    activeWith: (host) => `Sincronizando com ${host}…`,
+    counts: (favorites, playlists, plays) =>
+      `${count(favorites, "favorita", "favoritas")}, ${count(playlists, "playlist", "playlists")}, ${count(plays, "reprodução", "reproduções")}`,
+    fromPhone: (when, counts) => `Sincronizado ${when}: ${counts} do seu celular`,
+    fromPc: (when, counts) => `Sincronizado ${when}: ${counts} do seu PC`,
+    recent: "Sincronizações recentes",
+    hostErrors: {
+      "wrong code": "Código de pareamento incorreto",
+      "invalid request": "Solicitação de sincronização inválida",
+      "request too large": "Solicitação de sincronização muito grande",
+      "connection closed": "Conexão encerrada",
+      "sync failed": "Falha na sincronização",
+    },
     clientTitle: "Sincronizar com o PC",
     clientBody:
       "Mantenha favoritas, playlists e estatísticas iguais às do PC. No PC, abra Configurações → Sincronizar com o celular, ative e digite o endereço e o código que aparecem.",
@@ -535,6 +560,9 @@ export const pt: Messages = {
     pairing: "Conectando…",
     pairedWith: (host) => `Conectado ao seu PC (${host}). Sincroniza sozinho no mesmo Wi-Fi.`,
     syncing: "Sincronizando…",
+    searching: "Procurando seu PC na rede…",
+    sending: "Enviando sua biblioteca e reproduções…",
+    merging: "Combinando as alterações do seu PC…",
     syncNow: "Sincronizar agora",
     unpair: "Desconectar",
     synced: "Sincronizado com o PC",

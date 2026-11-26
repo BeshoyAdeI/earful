@@ -458,6 +458,16 @@ export const en = {
 
   settings: {
     title: "Settings",
+    navigation: "Settings sections",
+    groups: {
+      appearance: "Appearance",
+      playback: "Playback",
+      offline: "Offline & storage",
+      sync: "Sync",
+      backup: "Backup & import",
+      updates: "Updates",
+      engine: "Engine",
+    },
     appearance: "Appearance",
     theme: "Theme",
     dark: "Dark",
@@ -534,6 +544,21 @@ export const en = {
     noNetwork: "This PC isn't connected to a network.",
     lastSync: (when: string) => `Last synced ${when}`,
     never: "Not synced yet",
+    justNow: "just now",
+    waiting: "Waiting for your phone…",
+    activeWith: (host: string) => `Syncing with ${host}…`,
+    counts: (favorites: number, playlists: number, plays: number) =>
+      `${count(favorites, "favorite", "favorites")}, ${count(playlists, "playlist", "playlists")}, ${count(plays, "listen", "listens")}`,
+    fromPhone: (when: string, counts: string) => `Synced ${when}: ${counts} from your phone`,
+    fromPc: (when: string, counts: string) => `Synced ${when}: ${counts} from your PC`,
+    recent: "Recent syncs",
+    hostErrors: {
+      "wrong code": "Wrong pairing code",
+      "invalid request": "Invalid sync request",
+      "request too large": "Sync request too large",
+      "connection closed": "Connection closed",
+      "sync failed": "Sync failed",
+    },
     clientTitle: "Sync with your PC",
     clientBody:
       "Keep favorites, playlists and listening stats the same as on your PC. On the PC, open Settings → Sync with your phone, turn it on, and enter the address and code it shows.",
@@ -541,6 +566,9 @@ export const en = {
     pairing: "Connecting…",
     pairedWith: (host: string) => `Connected to your PC (${host}). Syncs by itself on the same Wi-Fi.`,
     syncing: "Syncing…",
+    searching: "Looking for your PC on the network…",
+    sending: "Sending your library and listens…",
+    merging: "Merging changes from your PC…",
     syncNow: "Sync now",
     unpair: "Disconnect",
     synced: "Synced with your PC",

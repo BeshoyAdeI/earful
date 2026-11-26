@@ -49,7 +49,7 @@ export function OfflineSection() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="text-xs font-medium text-fg-3">{t.offline.section}</h3>
+      <h4 className="text-xs font-medium text-fg-3">{t.offline.section}</h4>
       <div className="flex flex-col gap-3 rounded-[16px] bg-surface-1 p-4 ring-1 ring-line">
         <label className="flex items-center justify-between gap-3 text-sm">
           {t.offline.keep}

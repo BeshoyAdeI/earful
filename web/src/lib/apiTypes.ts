@@ -1,4 +1,5 @@
-import type { SyncStatus } from "../../../server/src/syncServer.js";
+import type { SyncCounts } from "../../../server/src/sync.js";
+import type { SyncActivity, SyncStatus } from "../../../server/src/syncServer.js";
 import type { AlbumCard, AlbumPage, ArtistPage, ArtistSongs, Genre, GenreArtist, GenrePage, Library, Lyrics, Playlist, Track } from "./types";
 
 import type { PlayEvent } from "../../../server/src/plays.js";
@@ -21,7 +22,7 @@ export class ApiError extends Error {
 
 export type Channel = "stable" | "nightly";
 
-export type { SyncStatus };
+export type { SyncActivity, SyncCounts, SyncStatus };
 
 /** The phone's side of sync (native/sync.ts). */
 export interface SyncClientStatus {
@@ -30,6 +31,8 @@ export interface SyncClientStatus {
   host?: string;
   lastSyncAt?: number;
   syncing: boolean;
+  phase?: "connecting" | "searching" | "sending" | "merging" | "done" | "failed";
+  lastResult?: SyncCounts & { at: number };
   error?: "unreachable" | "wrongCode" | "badAddress" | "badCode" | "notPairingCode";
 }
 

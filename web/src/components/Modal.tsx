@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { MD, useMediaQuery } from "../hooks/useMediaQuery";
 import { useT } from "../i18n";
+import { cn } from "../lib/format";
 import { IconButton } from "./IconButton";
 
 /**
@@ -15,9 +16,10 @@ interface Props {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  wide?: boolean;
 }
 
-export function Modal({ open, onClose, title, children }: Props) {
+export function Modal({ open, onClose, title, children, wide }: Props) {
   const isMd = useMediaQuery(MD);
   const reduce = useReducedMotion();
   const t = useT();
@@ -51,7 +53,7 @@ export function Modal({ open, onClose, title, children }: Props) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={from}
             transition={{ type: "spring", stiffness: 420, damping: 38 }}
-            className="island safe-bottom relative w-full rounded-b-none md:mx-4 md:max-w-md md:rounded-[20px]"
+            className={cn("island safe-bottom relative w-full rounded-b-none md:mx-4 md:rounded-[20px]", wide ? "md:max-w-3xl" : "md:max-w-md")}
           >
             <div className="island-core p-4 md:p-5">
               <div className="mb-3 flex items-center justify-between gap-3">
