@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import {
   ArrowLeftIcon,
   CaretDownIcon,
@@ -18,7 +19,7 @@ import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useUi, type PanelTab } from "../stores/ui";
 import { ArtistLinks } from "./ArtistLinks";
 import { Artwork } from "./Artwork";
-import { FavoriteButton, ModeSwitch, Scrubber, Transport } from "./Controls";
+import { FavoriteButton, ModeSwitch, Scrubber, Transport, Volume } from "./Controls";
 import { IconButton } from "./IconButton";
 import { LyricsView } from "./LyricsView";
 import { QueueList } from "./Queue";
@@ -245,6 +246,7 @@ export function PanelDrawer() {
 /** Full-screen Now Playing for phones. Drag down (or Back) to close. */
 export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const track = usePlayer(selectCurrent);
+  const native = Capacitor.isNativePlatform();
   const reduce = useReducedMotion();
   const drag = useDragControls();
   const [view, setView] = useState<"player" | "queue">("player");
@@ -290,11 +292,11 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
               </IconButton>
               <div className="pointer-events-none absolute left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-fg-3/50" />
               <div className="flex-1" />
-              {view === "queue" && (
+              {view === "queue" ? (
                 <IconButton label={t.nowPlaying.backToPlayer} onClick={() => setView("player")} className="-mr-2 text-fg">
                   <ArrowLeftIcon size={22} />
                 </IconButton>
-              )}
+              ) : native && <ModeSwitch />}
             </div>
 
             {view === "queue" ? (
@@ -312,7 +314,7 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
                     <TrackHeading track={track} large />
                     <Scrubber touch />
                     <Transport big onQueue={() => setView("queue")} />
-                    <ModeSwitch className="justify-center" />
+                    {native ? <Volume touch /> : <ModeSwitch className="justify-center" />}
                     <button
                       type="button"
                       onClick={() => lyricsCard.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
