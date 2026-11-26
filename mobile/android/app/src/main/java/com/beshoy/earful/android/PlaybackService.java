@@ -42,6 +42,7 @@ public class PlaybackService extends Service {
     private static final String TAG = "EarfulPlayback";
     private static final String CHANNEL = "playback";
     private static final int NOTIFICATION_ID = 1;
+    private static final long PAUSED_FOREGROUND_MS = 10 * 60 * 1000;
     private static final String ACTION = "com.beshoy.earful.android.action.";
 
     /** What the app last reported. */
@@ -76,9 +77,19 @@ public class PlaybackService extends Service {
     private NotificationManager notifications;
     private PowerManager.WakeLock wakeLock;
     private boolean foreground;
+    private boolean pausedForegroundTimeoutScheduled;
     private boolean noisyRegistered;
     private String artworkUrl = "";
     private Bitmap artwork;
+
+    private final Runnable pausedForegroundTimeout = () -> {
+        pausedForegroundTimeoutScheduled = false;
+        if (!foreground || state.playing) return;
+        // Keep the notification and clear its ongoing flag so it can be swiped away.
+        stopForeground(STOP_FOREGROUND_DETACH);
+        foreground = false;
+        notifications.notify(NOTIFICATION_ID, buildNotification(false));
+    };
 
     /** Shows what the app reported, starting the service when music starts. */
     static void refresh(Context context) {
@@ -172,14 +183,17 @@ public class PlaybackService extends Service {
                 return START_NOT_STICKY;
             }
             if (name.equals("dismiss")) {
-                if (!state.playing) stopSelf();
+                if (!state.playing) {
+                    stopSelf();
+                    return START_NOT_STICKY;
+                }
             } else {
                 emit(name, -1);
             }
         } else {
             // Started by the app with startForegroundService: Android requires startForeground right away,
             // even if the music was paused again in the meantime.
-            goForeground(buildNotification());
+            goForeground();
         }
         render();
         return START_NOT_STICKY;
@@ -194,6 +208,7 @@ public class PlaybackService extends Service {
     @Override
     public void onDestroy() {
         instance = null;
+        main.removeCallbacks(pausedForegroundTimeout);
         releaseWakeLock();
         setNoisyReceiver(false);
         session.setActive(false);
@@ -209,32 +224,41 @@ public class PlaybackService extends Service {
     }
 
     private void emit(String action, double position) {
-        if (listener != null) listener.onAction(action, position);
+        if (listener == null) return;
+        // Use the play action's foreground start allowance before asking the WebView to resume.
+        if ("play".equals(action) && !foreground) goForeground();
+        listener.onAction(action, position);
     }
 
     private void render() {
         loadArtwork(state.artwork);
         session.setMetadata(metadata());
         session.setPlaybackState(playbackState());
-        Notification notification = buildNotification();
         if (state.playing) {
+            if (pausedForegroundTimeoutScheduled) {
+                main.removeCallbacks(pausedForegroundTimeout);
+                pausedForegroundTimeoutScheduled = false;
+            }
             // Renewed by every progress report from the app; lapses if the app stops reporting.
             wakeLock.acquire(30 * 60 * 1000L);
             setNoisyReceiver(true);
-            goForeground(notification);
+            goForeground();
         } else {
             releaseWakeLock();
             setNoisyReceiver(false);
-            if (foreground) {
-                // Paused: the notification stays (and can be swiped away), but Android may reclaim the service.
-                stopForeground(STOP_FOREGROUND_DETACH);
-                foreground = false;
-            }
-            notifications.notify(NOTIFICATION_ID, notification);
+            schedulePausedForegroundTimeout();
+            notifications.notify(NOTIFICATION_ID, buildNotification(foreground));
         }
     }
 
-    private void goForeground(Notification notification) {
+    private void schedulePausedForegroundTimeout() {
+        if (!foreground || pausedForegroundTimeoutScheduled) return;
+        // Keep the WebView responsive to play, without restarting the timer on paused updates.
+        pausedForegroundTimeoutScheduled = main.postDelayed(pausedForegroundTimeout, PAUSED_FOREGROUND_MS);
+    }
+
+    private void goForeground() {
+        Notification notification = buildNotification(true);
         if (foreground) {
             notifications.notify(NOTIFICATION_ID, notification);
             return;
@@ -243,10 +267,11 @@ public class PlaybackService extends Service {
             if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
             else startForeground(NOTIFICATION_ID, notification);
             foreground = true;
+            if (!state.playing) schedulePausedForegroundTimeout();
         } catch (RuntimeException e) {
             // Resuming from the background can be refused on recent Android; keep the controls up regardless.
             Log.w(TAG, "Could not enter the foreground", e);
-            notifications.notify(NOTIFICATION_ID, notification);
+            notifications.notify(NOTIFICATION_ID, buildNotification(false));
         }
     }
 
@@ -280,7 +305,7 @@ public class PlaybackService extends Service {
             .build();
     }
 
-    private Notification buildNotification() {
+    private Notification buildNotification(boolean ongoing) {
         Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
         b.setSmallIcon(R.drawable.ic_stat_earful)
             .setContentTitle(state.title)
@@ -290,7 +315,7 @@ public class PlaybackService extends Service {
             .setDeleteIntent(command("dismiss"))
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setShowWhen(false)
-            .setOngoing(state.playing)
+            .setOngoing(ongoing)
             .setColor(0xFFC3EC52)
             .addAction(action(R.drawable.ic_media_previous, R.string.playback_previous, "previous"))
             .addAction(
