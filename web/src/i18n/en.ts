@@ -249,6 +249,7 @@ export const en = {
     },
     noClip: "This song has no music video on YouTube",
     radioContinuing: (title: string) => `Continuing with radio from "${title}"`,
+    radioQueued: (title: string) => `Autoplay added songs like "${title}" to the queue`,
     playsNext: (title: string) => `"${title}" plays next`,
     addedToQueue: (title: string) => `"${title}" added to the queue`,
     addedManyToQueue: (n: number) => `${count(n, "song", "songs")} added to the queue`,

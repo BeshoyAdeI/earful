@@ -243,6 +243,7 @@ export const pt: Messages = {
     },
     noClip: "Esta música não tem clipe no YouTube",
     radioContinuing: (title) => `Continuando com o rádio de "${title}"`,
+    radioQueued: (title) => `A reprodução automática adicionou músicas parecidas com "${title}" à fila`,
     playsNext: (title) => `"${title}" toca a seguir`,
     addedToQueue: (title) => `"${title}" adicionada à fila`,
     addedManyToQueue: (n) => `${count(n, "música adicionada", "músicas adicionadas")} à fila`,

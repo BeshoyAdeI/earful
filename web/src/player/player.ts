@@ -6,6 +6,7 @@ import { shuffled } from "../lib/format";
 import type { Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
 import { useDownloads } from "../stores/downloads";
+import { useLyrics } from "../stores/lyrics";
 import { openSettings } from "../stores/system";
 import { toast } from "../stores/ui";
 import { goTo } from "../lib/navigation";
@@ -257,6 +258,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const track = s.queue[index];
     if (!track) return;
     flushListen();
+    // Lyrics load with the song, so they're ready when the lyrics view opens (it reuses this request).
+    void useLyrics.getState().load(track);
     // The next track's download may still be running (a skip at 85%): give it a moment to land so it plays from
     // disk, but never hold the start for the whole download — the stream works meanwhile.
     const ready = !s.preferVideo && warming?.id === track.id
@@ -359,6 +362,32 @@ export const usePlayer = create<PlayerState>((set, get) => {
     syncSystemMedia();
   }
 
+  // Autoplay tops the queue up from radio while 3 songs are left (this one and 2 more), so it never runs dry and
+  // the next song can be warmed up like any other. One top-up per queue end; continueWithRadio stays the fallback.
+  const RADIO_AHEAD = 2;
+  let toppingUpFrom: string | null = null;
+
+  async function topUpWithRadio() {
+    const s = get();
+    if (!s.autoRadio || s.repeat !== "off") return;
+    const last = s.queue[s.queue.length - 1];
+    if (!last || s.queue.length - 1 - s.index > RADIO_AHEAD || toppingUpFrom === last.id) return;
+    toppingUpFrom = last.id;
+    try {
+      const known = new Set(s.queue.map((t) => t.id));
+      const more = (await api.radio(last.id)).filter((t) => !known.has(t.id)).slice(0, 25);
+      // The queue was replaced meanwhile (a new playlist): these songs belong to the old one.
+      if (!more.length || get().queue[get().queue.length - 1]?.id !== last.id) return;
+      set((st) => ({
+        queue: [...st.queue, ...more],
+        original: st.original ? [...st.original, ...more] : null,
+      }));
+      toast(getT().player.radioQueued(last.title));
+    } catch {
+      toppingUpFrom = null; // try again on the next song; continueWithRadio still covers the very end
+    }
+  }
+
   async function continueWithRadio() {
     const s = get();
     const last = s.queue[s.index];
@@ -386,6 +415,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     if (!track || recordedToken === token) return;
     recordedToken = token;
     useLibrary.getState().recordPlay(track);
+    void topUpWithRadio();
     void api.cachePlayed(track).then(() => useDownloads.getState().loadOffline()).catch(() => {});
     // Warm up the next track (and, in Video mode, find and resolve its clip) so it starts quickly.
     const upcoming = s.preferVideo ? s.queue[s.index + 1] : upcomingTrack(s);
