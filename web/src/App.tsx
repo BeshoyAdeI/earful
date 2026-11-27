@@ -37,6 +37,7 @@ import Genre from "./views/Genre";
 import Home from "./views/Home";
 import Library from "./views/Library";
 import Profile from "./views/Profile";
+import ProfileTop from "./views/ProfileTop";
 import Search from "./views/Search";
 
 const SHEET_HASH = `#${NOW_PLAYING_HASH}`;
@@ -187,6 +188,7 @@ export default function App() {
               <Route path="/search/album/:id" element={<Album />} />
               <Route path={paths.library} element={<Library />} />
               <Route path={paths.profile} element={<Profile />} />
+              <Route path="/profile/top/:kind" element={<ProfileTop />} />
               <Route path={paths.favorites} element={<Collection kind="favorites" />} />
               <Route path={paths.history} element={<Collection kind="history" />} />
               <Route path={paths.offline} element={<Collection kind="offline" />} />

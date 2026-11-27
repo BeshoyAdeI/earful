@@ -146,9 +146,11 @@ interface ListProps {
   showAlbum?: boolean;
   header?: boolean;
   rowDetail?: (track: Track) => string;
+  /** Where `tracks` starts in `context` (a page of a longer list): numbers rows and picks the song to play from there. */
+  offset?: number;
 }
 
-export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted = true, header = true, rowDetail }: ListProps) {
+export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted = true, header = true, rowDetail, offset = 0 }: ListProps) {
   const playList = usePlayer((s) => s.playList);
   const t = useT();
   // Pages ask for the album column where it makes sense; Settings can turn it off everywhere.
@@ -179,13 +181,13 @@ export function TrackList({ tracks, context, playlistId, showAlbum: albumWanted 
           <TrackRow
             key={`${t.id}-${i}`}
             track={t}
-            position={i}
+            position={offset + i}
             playlistId={playlistId}
             showAlbum={showAlbum}
             detail={rowDetail?.(t)}
             onPlay={() => {
               if (playlistId) usePlaylistPlays.getState().markPlayed(playlistId);
-              playList(context ?? tracks, i);
+              playList(context ?? tracks, context ? offset + i : i);
             }}
           />
         ))}

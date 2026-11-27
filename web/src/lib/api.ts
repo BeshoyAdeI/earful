@@ -90,8 +90,9 @@ export const api: EarfulApi = {
 
   recordPlay: (event) => request("/api/plays", { method: "POST", json: event, keepalive: true }),
   recordPlayBeacon: (event) => navigator.sendBeacon?.("/api/plays", new Blob([JSON.stringify(event)], { type: "text/plain" })) ?? false,
-  stats: ({ from, to, tzOffsetMin }, signal) => {
+  stats: ({ from, to, tzOffsetMin, top }, signal) => {
     const params = new URLSearchParams({ tz: String(tzOffsetMin) });
+    if (top) params.set("top", String(top));
     if (from !== null) params.set("from", String(from));
     if (to !== null) params.set("to", String(to));
     return request(`/api/stats?${params}`, { signal });

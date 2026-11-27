@@ -5,7 +5,11 @@ export interface StatsRange {
   from: number | null;
   to: number | null;
   tzOffsetMin: number;
+  /** How many songs, artists and albums the tops list (the profile shows 50/50/30; "Show all" pages ask for more). */
+  top?: number;
 }
+
+export const MAX_TOP = 1000;
 
 export interface Stats {
   range: { from: number | null; to: number | null };
@@ -46,7 +50,8 @@ function addSong(songs: Map<string, Song>, event: PlayEvent, play: number) {
   add(song, event, play);
 }
 
-export function computeStats(events: PlayEvent[], { from, to, tzOffsetMin }: StatsRange): Stats {
+export function computeStats(events: PlayEvent[], { from, to, tzOffsetMin, top }: StatsRange): Stats {
+  const limit = (fallback: number) => Math.min(top ?? fallback, MAX_TOP);
   const inRange = (at: number) => (from === null || at >= from) && (to === null || at < to);
   const offset = tzOffsetMin * 60_000;
   const songs = new Map<string, Song>();
@@ -122,17 +127,17 @@ export function computeStats(events: PlayEvent[], { from, to, tzOffsetMin }: Sta
 
   // Tops only list what was really played (a few seconds of a skipped song still count as time, not as a play).
   const played = <T extends { plays: number }>(x: T) => x.plays > 0;
-  const topSongs = [...songs.values()].filter(played).sort(rank).slice(0, 50).map(({ event, plays, seconds }) => {
+  const topSongs = [...songs.values()].filter(played).sort(rank).slice(0, limit(50)).map(({ event, plays, seconds }) => {
     const { at: _at, sec: _sec, ...metadata } = event;
     const track: Track = { ...metadata, art: event.thumb, kind: "song" };
     return { track, plays, seconds };
   });
-  const topArtists = [...artists.values()].filter(played).sort(rank).slice(0, 50).map(({ name, id, plays, seconds, songs }) => {
+  const topArtists = [...artists.values()].filter(played).sort(rank).slice(0, limit(50)).map(({ name, id, plays, seconds, songs }) => {
     let favorite: Song | undefined;
     for (const song of songs.values()) if (!favorite || rank(song, favorite) < 0) favorite = song;
     return { name, id, plays, seconds, thumb: favorite?.event.thumb ?? "", songs: songs.size };
   });
-  const topAlbums = [...albums.values()].filter(played).sort(rank).slice(0, 30)
+  const topAlbums = [...albums.values()].filter(played).sort(rank).slice(0, limit(30))
     .map(({ name, artist, event, plays, seconds }) => ({ name, artist, plays, seconds, thumb: event.thumb }));
 
   const streaks = { current: 0, longest: 0 };

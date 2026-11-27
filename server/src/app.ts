@@ -14,7 +14,7 @@ import { coverUrl, isCoverType, MAX_COVER_BYTES } from "./image.js";
 import { allPlays, clearPlays, mergePlays, recordPlay, usePlaysStorage } from "./plays.js";
 import { newSyncCode, setSyncEnabled, startSyncIfEnabled, syncStatus } from "./syncServer.js";
 import { playsFileStorage } from "./playsFile.js";
-import { computeStats } from "./stats.js";
+import { computeStats, MAX_TOP } from "./stats.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
 import { getSettings, isCacheDays, updateSettings } from "./settings.js";
 import { proxyStream, serveFile } from "./stream.js";
@@ -302,13 +302,14 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   });
 
   app.get("/api/stats", async (req, reply) => {
-    const { from, to, tz } = req.query as Record<string, unknown>;
+    const { from, to, tz, top } = req.query as Record<string, unknown>;
     const parse = (value: unknown, limit: number) => {
       if (value === undefined) return null;
       if (typeof value === "string" && /^-?\d+$/.test(value) && Math.abs(Number(value)) <= limit) return Number(value);
       throw new HttpError(400, msg("invalidStatsRange"));
     };
-    const range = { from: parse(from, 8.64e15), to: parse(to, 8.64e15), tzOffsetMin: parse(tz, 14 * 60) ?? 0 };
+    const tops = parse(top, MAX_TOP);
+    const range = { from: parse(from, 8.64e15), to: parse(to, 8.64e15), tzOffsetMin: parse(tz, 14 * 60) ?? 0, top: tops !== null && tops > 0 ? tops : undefined };
     if (range.from !== null && range.to !== null && range.from > range.to) throw new HttpError(400, msg("invalidStatsRange"));
     reply.header("cache-control", "no-store");
     return computeStats(await allPlays(), range);

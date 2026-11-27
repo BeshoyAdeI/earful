@@ -1,6 +1,6 @@
-import { ChartBarIcon, PencilSimpleIcon, PlayIcon, ShareNetworkIcon, ShuffleIcon, TrashIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, ChartBarIcon, PencilSimpleIcon, PlayIcon, ShareNetworkIcon, ShuffleIcon, TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { ArtistLinks } from "../components/ArtistLinks";
+import { Link } from "react-router";
 import { Artwork } from "../components/Artwork";
 import { ListeningCharts } from "../components/ListeningCharts";
 import { Modal } from "../components/Modal";
@@ -8,16 +8,18 @@ import { EmptyState, PageHeader, Section } from "../components/Page";
 import { ProfileAvatar, useProfileName } from "../components/ProfileAvatar";
 import { ProfileSegments } from "../components/ProfileSegments";
 import { ShareStats } from "../components/ShareStats";
+import { AlbumGrid, ArtistGrid, ArtistName, statCard } from "../components/TopItems";
 import { TrackList } from "../components/TrackList";
 import { useT } from "../i18n";
 import { api, type Stats, type StatsRange } from "../lib/api";
 import { shuffled } from "../lib/format";
 import { hoursListened, listeningRange, minutesListened, playCount } from "../lib/profileStats";
 import { discardCurrentListen, usePlayer } from "../player/player";
+import { paths } from "../lib/routes";
 import { profileRanges, useProfile, type ProfileRange } from "../stores/profile";
 import { toast } from "../stores/ui";
 
-const card = "min-w-0 rounded-[20px] bg-surface-1 ring-1 ring-line";
+const card = statCard;
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors disabled:opacity-50";
 const secondary = `${button} bg-surface-3 text-fg hover:bg-surface-4`;
 
@@ -87,15 +89,21 @@ function Totals({ stats }: { stats: Stats }) {
   );
 }
 
-function ArtistName({ artist }: { artist: Stats["topArtists"][number] }) {
-  return <ArtistLinks track={{ artist: artist.name, artists: [{ name: artist.name, id: artist.id }] }} />;
+const PREVIEW = { songs: 10, artists: 12, albums: 12 };
+
+/** Opens the full, paginated list on its own page (views/ProfileTop.tsx). */
+function ShowAll({ kind }: { kind: "songs" | "artists" | "albums" }) {
+  const t = useT();
+  return (
+    <Link to={paths.profileTop(kind)} className={`${secondary} w-fit`}>
+      {t.profile.showAll} <CaretRightIcon size={14} />
+    </Link>
+  );
 }
 
 function Rankings({ stats }: { stats: Stats }) {
   const t = useT();
   const p = t.profile;
-  const [allSongs, setAllSongs] = useState(false);
-  const [allArtists, setAllArtists] = useState(false);
   const tracks = stats.topSongs.map(({ track }) => track);
   const counts = new Map(stats.topSongs.map(({ track, plays }) => [track.id, plays]));
   const top = stats.topArtists[0];
@@ -124,45 +132,21 @@ function Rankings({ stats }: { stats: Stats }) {
             </button>
           </div>
         )}>
-          <TrackList tracks={allSongs ? tracks : tracks.slice(0, 10)} context={tracks} header={false} showAlbum={false}
+          <TrackList tracks={tracks.slice(0, PREVIEW.songs)} context={tracks} header={false} showAlbum={false}
             rowDetail={(track) => playCount(counts.get(track.id) ?? 0, t)} />
-          {tracks.length > 10 && (
-            <button type="button" className={secondary} aria-expanded={allSongs} onClick={() => setAllSongs(!allSongs)}>
-              {allSongs ? p.showLess : p.showAll}
-            </button>
-          )}
+          {tracks.length > PREVIEW.songs && <ShowAll kind="songs" />}
         </Section>
       )}
       {top && (
         <Section title={p.topArtists}>
-          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {stats.topArtists.slice(0, allArtists ? 50 : 12).map((artist) => (
-              <li key={artist.name} className={`${card} space-y-1 p-2 text-center sm:p-3`}>
-                <Artwork src={artist.thumb} className="mx-auto mb-2 aspect-square w-full max-w-32 rounded-full" />
-                <p className="truncate text-sm font-semibold" title={artist.name}><ArtistName artist={artist} /></p>
-                <p className="font-mono text-xs text-fg-2 tabular-nums">{playCount(artist.plays, t)}</p>
-              </li>
-            ))}
-          </ul>
-          {stats.topArtists.length > 12 && (
-            <button type="button" className={secondary} aria-expanded={allArtists} onClick={() => setAllArtists(!allArtists)}>
-              {allArtists ? p.showLess : p.showAll}
-            </button>
-          )}
+          <ArtistGrid artists={stats.topArtists.slice(0, PREVIEW.artists)} />
+          {stats.topArtists.length > PREVIEW.artists && <ShowAll kind="artists" />}
         </Section>
       )}
       {stats.topAlbums.length > 0 && (
         <Section title={p.topAlbums}>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {stats.topAlbums.map((album) => (
-              <li key={JSON.stringify([album.name, album.artist])} className={`${card} space-y-1 p-3`}>
-                <Artwork src={album.thumb} className="mb-2 aspect-square w-full rounded-[12px]" />
-                <p className="truncate text-sm font-semibold" title={album.name}>{album.name}</p>
-                <p className="truncate text-xs text-fg-2" title={album.artist}>{album.artist}</p>
-                <p className="font-mono text-xs text-fg-2 tabular-nums">{playCount(album.plays, t)}</p>
-              </li>
-            ))}
-          </ul>
+          <AlbumGrid albums={stats.topAlbums.slice(0, PREVIEW.albums)} />
+          {stats.topAlbums.length > PREVIEW.albums && <ShowAll kind="albums" />}
         </Section>
       )}
     </>
@@ -256,16 +240,18 @@ export default function Profile() {
         ) : hasActivity ? (
           <>
             <Totals stats={data.stats} />
-            <Rankings key={choice} stats={data.stats} />
             <ListeningCharts stats={data.stats} range={data.range} />
+            <div>
+              <button type="button" className={`${button} bg-accent text-accent-ink`} onClick={() => setSharing(true)}>
+                <ShareNetworkIcon size={18} />{p.share}
+              </button>
+            </div>
+            <Rankings key={choice} stats={data.stats} />
           </>
         ) : (
           <EmptyState icon={<ChartBarIcon size={32} />} title={p.emptyTitle} body={p.empty} />
         )}
         <footer className="flex flex-wrap gap-2">
-          <button type="button" disabled={!hasActivity} className={`${button} bg-accent text-accent-ink`} onClick={() => setSharing(true)}>
-            <ShareNetworkIcon size={18} />{p.share}
-          </button>
           <button type="button" className={`${button} text-fg-2 hover:bg-surface-3`} onClick={() => setConfirming(true)}>
             <TrashIcon size={18} />{p.clear}
           </button>
